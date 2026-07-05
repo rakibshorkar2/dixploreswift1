@@ -148,7 +148,7 @@ struct BrowserView: View {
                     .foregroundColor(.secondary)
                 Text("e.g. http://172.16.50.4")
                     .font(.caption)
-                    .foregroundColor(.tertiary)
+                    .foregroundColor(.secondary.opacity(0.6))
             }
             Spacer()
         } else {

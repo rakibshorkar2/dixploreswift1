@@ -37,10 +37,11 @@ class DownloadService: NSObject, ObservableObject {
         let downloadTask = urlSession.downloadTask(with: url)
         downloadTasks[task.id] = downloadTask
 
-        progressObservers[task.id] = downloadTask.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+        let taskID = task.id
+        progressObservers[task.id] = downloadTask.progress.observe(\.fractionCompleted) { progress, _ in
             Task { @MainActor in
-                self?.activeDownloads[task.id]?.progress = progress.fractionCompleted
-                self?.updateLiveActivity(for: task.id, progress: progress.fractionCompleted)
+                DownloadService.shared.activeDownloads[taskID]?.progress = progress.fractionCompleted
+                DownloadService.shared.updateLiveActivity(for: taskID, progress: progress.fractionCompleted)
             }
         }
 
@@ -49,25 +50,25 @@ class DownloadService: NSObject, ObservableObject {
     }
 
     func pauseDownload(id: UUID) {
-        guard let task = activeDownloads[id] else { return }
-        task.status = .paused
-        downloadTasks[id]?.cancel(byProducingResumeData: { resumeData in
+        guard activeDownloads[id] != nil else { return }
+        activeDownloads[id]?.status = .paused
+        downloadTasks[id]?.cancel(byProducingResumeData: { [weak self] resumeData in
             Task { @MainActor in
-                self.activeDownloads[id]?.resumeData = resumeData
+                self?.activeDownloads[id]?.resumeData = resumeData
             }
         })
     }
 
     func resumeDownload(id: UUID) {
-        guard var task = activeDownloads[id] else { return }
-        task.status = .downloading
+        guard activeDownloads[id] != nil else { return }
+        activeDownloads[id]?.status = .downloading
 
-        if let resumeData = task.resumeData {
+        if let resumeData = activeDownloads[id]?.resumeData {
             let downloadTask = urlSession.downloadTask(withResumeData: resumeData)
             downloadTasks[id] = downloadTask
             downloadTask.resume()
-        } else {
-            startDownload(url: task.url)
+        } else if let url = activeDownloads[id]?.url {
+            startDownload(url: url)
         }
     }
 
@@ -115,7 +116,7 @@ class DownloadService: NSObject, ObservableObject {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
 
         let attributes = DownloadProgressAttributes(filename: task.filename)
-        let state = DownloadProgressAttributes.ContentState(progress: 0, status: .downloading)
+        let state = DownloadProgressAttributes.ContentState(progress: 0, status: "downloading")
 
         let content = ActivityContent(state: state, staleDate: nil)
         let activity = try? Activity.request(attributes: attributes, content: content)
@@ -124,7 +125,7 @@ class DownloadService: NSObject, ObservableObject {
 
     private func updateLiveActivity(for id: UUID, progress: Double) {
         guard let activity = liveActivities[id] else { return }
-        let state = DownloadProgressAttributes.ContentState(progress: progress, status: .downloading)
+        let state = DownloadProgressAttributes.ContentState(progress: progress, status: "downloading")
         Task {
             await activity.update(using: state)
         }
@@ -132,7 +133,7 @@ class DownloadService: NSObject, ObservableObject {
 
     private func endLiveActivity(for id: UUID) {
         guard let activity = liveActivities[id] else { return }
-        let state = DownloadProgressAttributes.ContentState(progress: 1.0, status: .completed)
+        let state = DownloadProgressAttributes.ContentState(progress: 1.0, status: "completed")
         Task {
             await activity.end(using: state, dismissalPolicy: .default)
         }

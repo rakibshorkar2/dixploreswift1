@@ -15,27 +15,29 @@ class ProxyService: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             var didResume = false
-            connection.stateUpdateHandler = { state in
-                guard !didResume else { return }
-                switch state {
-                case .ready:
-                    didResume = true
-                    let latency = Date().timeIntervalSince(start)
-                    connection.cancel()
-                    continuation.resume(returning: latency)
-                case .failed, .cancelled:
-                    didResume = true
-                    continuation.resume(returning: nil)
-                default:
-                    break
-                }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+            let timeoutTask = DispatchWorkItem {
                 guard !didResume else { return }
                 didResume = true
                 connection.cancel()
                 continuation.resume(returning: nil)
             }
+
+            connection.stateUpdateHandler = { state in
+                if !didResume, case .ready = state {
+                    didResume = true
+                    timeoutTask.cancel()
+                    let latency = Date().timeIntervalSince(start)
+                    connection.cancel()
+                    continuation.resume(returning: latency)
+                } else if !didResume, case .failed = state {
+                    didResume = true
+                    timeoutTask.cancel()
+                    connection.cancel()
+                    continuation.resume(returning: nil)
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutTask)
         }
     }
 
@@ -50,21 +52,22 @@ class ProxyService: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             var didResume = false
-            connection.stateUpdateHandler = { [weak self] state in
-                guard !didResume, let self else { return }
+            connection.stateUpdateHandler = { state in
+                guard !didResume else { return }
                 switch state {
                 case .ready:
-                    performSOCKS5Handshake(connection: connection,
-                                           username: username,
-                                           password: password,
-                                           targetHost: targetHost,
-                                           targetPort: targetPort) { success in
-                        didResume = true
+                    didResume = true
+                    self.performSOCKS5Handshake(connection: connection,
+                                                  username: username,
+                                                  password: password,
+                                                  targetHost: targetHost,
+                                                  targetPort: targetPort) { success in
                         connection.cancel()
                         continuation.resume(returning: success)
                     }
                 case .failed, .cancelled:
                     didResume = true
+                    connection.cancel()
                     continuation.resume(returning: false)
                 default:
                     break
@@ -79,7 +82,7 @@ class ProxyService: ObservableObject {
         let handshake = Data([0x05, 0x01, 0x02])
         connection.send(content: handshake, completion: .contentProcessed { error in
             guard error == nil else { completion(false); return }
-            connection.receive(minimumIncomingLength: 2, maximumLength: 2) { data, _, _, _ in
+            connection.receive(minimumIncompleteLength: 2, maximumLength: 2) { data, _, _, _ in
                 guard let data = data, data.count == 2 else { completion(false); return }
                 let authMethod = data[1]
                 switch authMethod {
@@ -116,7 +119,7 @@ class ProxyService: ObservableObject {
 
         connection.send(content: authData, completion: .contentProcessed { error in
             guard error == nil else { completion(false); return }
-            connection.receive(minimumIncomingLength: 2, maximumLength: 2) { data, _, _, _ in
+            connection.receive(minimumIncompleteLength: 2, maximumLength: 2) { data, _, _, _ in
                 guard let data = data, data.count == 2, data[1] == 0x00
                 else { completion(false); return }
                 self.sendConnectRequest(connection: connection,
@@ -139,7 +142,7 @@ class ProxyService: ObservableObject {
 
         connection.send(content: request, completion: .contentProcessed { error in
             guard error == nil else { completion(false); return }
-            connection.receive(minimumIncomingLength: 10, maximumLength: 255) { data, _, _, _ in
+            connection.receive(minimumIncompleteLength: 10, maximumLength: 255) { data, _, _, _ in
                 guard let data = data, data.count >= 10, data[1] == 0x00
                 else { completion(false); return }
                 completion(true)

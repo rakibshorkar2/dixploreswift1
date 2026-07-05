@@ -18,7 +18,7 @@ struct DownloadsView: View {
                             .foregroundColor(.secondary)
                         Text("Download files from the browser tab")
                             .font(.caption)
-                            .foregroundColor(.tertiary)
+                            .foregroundColor(.secondary.opacity(0.6))
                     }
                     Spacer()
                 } else {
