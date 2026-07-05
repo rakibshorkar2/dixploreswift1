@@ -1,6 +1,10 @@
 import Foundation
 import Network
 
+final class GuardFlag: @unchecked Sendable {
+    var value = false
+}
+
 class ProxyService: ObservableObject {
     static let shared = ProxyService()
 
@@ -13,33 +17,22 @@ class ProxyService: ObservableObject {
         )
 
         return await withCheckedContinuation { continuation in
-            let guardLock = NSLock()
-            var didResume = false
-
+            let flag = GuardFlag()
             let timeoutTask = DispatchWorkItem {
-                guardLock.lock()
-                let shouldResume = !didResume
-                if shouldResume { didResume = true }
-                guardLock.unlock()
-                guard shouldResume else { return }
+                guard !flag.value else { return }
+                flag.value = true
                 connection.cancel()
                 continuation.resume(returning: nil)
             }
 
             connection.stateUpdateHandler = { state in
-                guardLock.lock()
-                let shouldResume = !didResume
-                if shouldResume { didResume = true }
-                guardLock.unlock()
-                guard shouldResume else { return }
-
+                guard !flag.value else { return }
+                flag.value = true
                 timeoutTask.cancel()
                 connection.cancel()
-
-                switch state {
-                case .ready:
+                if case .ready = state {
                     continuation.resume(returning: Date().timeIntervalSince(start))
-                default:
+                } else {
                     continuation.resume(returning: nil)
                 }
             }
@@ -58,15 +51,11 @@ class ProxyService: ObservableObject {
         )
 
         return await withCheckedContinuation { continuation in
-            let guardLock = NSLock()
-            var didResume = false
+            let flag = GuardFlag()
 
             connection.stateUpdateHandler = { state in
-                guardLock.lock()
-                let shouldResume = !didResume
-                if shouldResume { didResume = true }
-                guardLock.unlock()
-                guard shouldResume else { return }
+                guard !flag.value else { return }
+                flag.value = true
 
                 switch state {
                 case .ready:
