@@ -26,9 +26,7 @@
 		00000021 /* DirectoryParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000022; };
 		00000023 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000024; };
 		00000025 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000026; };
-		00000027 /* SOCKS5Proxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000028; };
 		00000047 /* SOCKS5URLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000046; };
-		00000029 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000002A; };
 		0000002B /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000002C; };
 		0000002D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0000002E; };
 /* End PBXBuildFile section */
@@ -53,9 +51,6 @@
 		00000022 /* DirectoryParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryParser.swift; sourceTree = "<group>"; };
 		00000024 /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
 		00000026 /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
-		00000028 /* SOCKS5Proxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOCKS5Proxy.swift; sourceTree = "<group>"; };
-		0000002A /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
-		0000002C /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		00000046 /* SOCKS5URLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOCKS5URLProtocol.swift; sourceTree = "<group>"; };
 		0000002E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0000002F /* DirXplore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DirXplore.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -153,9 +148,7 @@
 		0000003A /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
-				00000028 /* SOCKS5Proxy.swift */,
 				00000046 /* SOCKS5URLProtocol.swift */,
-				0000002A /* LiveActivityManager.swift */,
 				0000002C /* Extensions.swift */,
 			);
 			path = Utilities;
@@ -251,9 +244,7 @@
 				00000021 /* DirectoryParser.swift in Sources */,
 				00000023 /* StorageService.swift in Sources */,
 				00000025 /* NetworkService.swift in Sources */,
-				00000027 /* SOCKS5Proxy.swift in Sources */,
 				00000047 /* SOCKS5URLProtocol.swift in Sources */,
-				00000029 /* LiveActivityManager.swift in Sources */,
 				0000002B /* Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
