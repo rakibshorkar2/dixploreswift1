@@ -13,7 +13,37 @@ class SOCKS5URLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
         guard let proxy = proxyConfig, proxy.isEnabled else { return false }
         if URLProtocol.property(forKey: handledKey, in: request) != nil { return false }
-        return request.url?.scheme == "http"
+        guard let scheme = request.url?.scheme, scheme == "http" else { return false }
+        if let host = request.url?.host, isPrivateAddress(host) { return false }
+        return true
+    }
+
+    private static func isPrivateAddress(_ host: String) -> Bool {
+        if let addr = IPv4Addr(host) {
+            return addr.isPrivate || addr.isLoopback || addr.isLinkLocal
+        }
+        return false
+    }
+
+    private struct IPv4Addr {
+        let octets: [UInt8]
+        init?(_ s: String) {
+            let parts = s.split(separator: ".", omittingEmptySubsequences: false)
+            guard parts.count == 4 else { return nil }
+            var o = [UInt8]()
+            for p in parts {
+                guard let v = UInt8(p) else { return nil }
+                o.append(v)
+            }
+            octets = o
+        }
+        var isPrivate: Bool {
+            octets[0] == 10
+            || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
+            || (octets[0] == 192 && octets[1] == 168)
+        }
+        var isLoopback: Bool { octets[0] == 127 }
+        var isLinkLocal: Bool { octets[0] == 169 && octets[1] == 254 }
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -54,7 +84,7 @@ class SOCKS5URLProtocol: URLProtocol {
             case .failed(let error):
                 fail(with: error)
             case .cancelled:
-                fail(with: SOCKS5Error.connectFailed)
+                fail(with: SOCKS5Error.connectFailed(replyCode: nil))
             default:
                 break
             }
@@ -127,8 +157,15 @@ class SOCKS5URLProtocol: URLProtocol {
             guard let self else { return }
             if let error = error { fail(with: error); return }
             connection.receive(minimumIncompleteLength: 10, maximumLength: 255) { data, _, _, error in
-                guard let data = data, data.count >= 10, data[1] == 0x00 else {
-                    self.fail(with: error ?? SOCKS5Error.connectFailed); return
+                guard let data = data else {
+                    self.fail(with: error ?? SOCKS5Error.connectFailed(replyCode: nil)); return
+                }
+                guard data.count >= 2 else {
+                    self.fail(with: SOCKS5Error.connectFailed(replyCode: nil)); return
+                }
+                let reply = data[1]
+                guard reply == 0x00 else {
+                    self.fail(with: SOCKS5Error.connectFailed(replyCode: reply)); return
                 }
                 self.sendHTTPRequest(connection: connection, request: request)
             }
@@ -266,7 +303,7 @@ enum SOCKS5Error: LocalizedError {
     case handshakeFailed
     case unsupportedAuth
     case authFailed
-    case connectFailed
+    case connectFailed(replyCode: UInt8?)
     case invalidRequest
     case invalidResponse
 
@@ -276,7 +313,11 @@ enum SOCKS5Error: LocalizedError {
         case .handshakeFailed: return "SOCKS5 handshake failed"
         case .unsupportedAuth: return "Unsupported authentication method"
         case .authFailed: return "SOCKS5 authentication failed"
-        case .connectFailed: return "SOCKS5 target connection failed"
+        case .connectFailed(let code):
+            if let c = code {
+                return "SOCKS5 target connection failed (reply \(c))"
+            }
+            return "SOCKS5 target connection failed"
         case .invalidRequest: return "Invalid HTTP request"
         case .invalidResponse: return "Invalid HTTP response"
         }
