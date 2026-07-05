@@ -21,6 +21,9 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Show buildable schemes
+        run: xcodebuild -list -project DirXplore.xcodeproj
+
       - name: Create export options plist
         run: |
           cat > ExportOptions.plist << EOF
@@ -49,7 +52,7 @@ jobs:
       - name: Build archive
         run: |
           xcodebuild clean archive \
-            -project DirXplore/DirXplore.xcodeproj \
+            -project DirXplore.xcodeproj \
             -scheme DirXplore \
             -configuration Release \
             -archivePath DirXplore.xcarchive \
