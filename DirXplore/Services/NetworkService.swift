@@ -61,13 +61,15 @@ class NetworkService: ObservableObject {
 
             let contentType = httpResponse.allHeaderFields["Content-Type"] as? String ?? ""
 
+            let baseURL = httpResponse.url ?? currentURL
+
             if contentType.contains("text/html") || html.contains("<html") || html.contains("<HTML") {
-                return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: currentURL)
+                return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: baseURL)
             } else if contentType.contains("text/plain") || contentType.contains("application/octet-stream") {
-                return DirectoryParser.shared.parseFTPStyleListing(text: html, baseURL: currentURL)
+                return DirectoryParser.shared.parseFTPStyleListing(text: html, baseURL: baseURL)
             }
 
-            return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: currentURL)
+            return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: baseURL)
         }
         throw NetworkError.invalidResponse
     }

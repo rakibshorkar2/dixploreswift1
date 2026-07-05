@@ -43,12 +43,11 @@ class BrowserViewModel: ObservableObject {
 
     func openEntry(_ entry: DirectoryEntry) {
         if entry.isDirectory {
-            guard let url = URL(string: entry.url.absoluteString) else { return }
-            navigationHistory.append(url)
+            navigationHistory.append(entry.url)
             canGoBack = navigationHistory.count > 1
             forwardStack.removeAll()
             canGoForward = false
-            fetchDirectory(url: url)
+            fetchDirectory(url: entry.url)
         } else {
             DownloadService.shared.startDownload(url: entry.url)
         }

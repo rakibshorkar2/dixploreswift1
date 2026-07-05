@@ -6,6 +6,13 @@ class DirectoryParser {
     func parseApacheDirectoryListing(html: String, baseURL: URL) -> [DirectoryEntry] {
         var entries: [DirectoryEntry] = []
 
+        let normalizedBase: URL
+        if baseURL.absoluteString.hasSuffix("/") {
+            normalizedBase = baseURL
+        } else {
+            normalizedBase = URL(string: baseURL.absoluteString + "/") ?? baseURL
+        }
+
         let pattern = "<a\\s+href=\"([^\"]+)\">([^<]+)</a>"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return entries
@@ -30,13 +37,13 @@ class DirectoryParser {
             guard !name.isEmpty && name != "Parent Directory" else { continue }
 
             let entryURL: URL
-            if let resolved = URL(string: href, relativeTo: baseURL) {
+            if let resolved = URL(string: href, relativeTo: normalizedBase) {
                 entryURL = resolved
             } else if let encoded = href.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-                      let resolved = URL(string: encoded, relativeTo: baseURL) {
+                      let resolved = URL(string: encoded, relativeTo: normalizedBase) {
                 entryURL = resolved
             } else {
-                entryURL = baseURL.appendingPathComponent(href)
+                entryURL = normalizedBase.appendingPathComponent(href)
             }
 
             entries.append(DirectoryEntry(
