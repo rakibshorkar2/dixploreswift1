@@ -1,0 +1,383 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		00000001 /* DirXploreApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000002; };
+		00000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000004; };
+		00000005 /* BrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000006; };
+		00000007 /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000008; };
+		00000009 /* ProxyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000A; };
+		0000000B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000C; };
+		0000000D /* DirectoryEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000E; };
+		0000000F /* DownloadTaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000010; };
+		00000011 /* ProxyConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000012; };
+		00000013 /* Bookmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000014; };
+		00000015 /* BrowserViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000016; };
+		00000017 /* DownloadsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000018; };
+		00000019 /* ProxyViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000001A; };
+		0000001B /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000001C; };
+		0000001D /* ProxyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000001E; };
+		0000001F /* DownloadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000020; };
+		00000021 /* DirectoryParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000022; };
+		00000023 /* StorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000024; };
+		00000025 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000026; };
+		00000027 /* SOCKS5Proxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000028; };
+		00000029 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000002A; };
+		0000002B /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000002C; };
+		0000002D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0000002E; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		00000002 /* DirXploreApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirXploreApp.swift; sourceTree = "<group>"; };
+		00000004 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		00000006 /* BrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserView.swift; sourceTree = "<group>"; };
+		00000008 /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
+		0000000A /* ProxyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyView.swift; sourceTree = "<group>"; };
+		0000000C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0000000E /* DirectoryEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryEntry.swift; sourceTree = "<group>"; };
+		00000010 /* DownloadTaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadTaskItem.swift; sourceTree = "<group>"; };
+		00000012 /* ProxyConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyConfig.swift; sourceTree = "<group>"; };
+		00000014 /* Bookmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bookmark.swift; sourceTree = "<group>"; };
+		00000016 /* BrowserViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserViewModel.swift; sourceTree = "<group>"; };
+		00000018 /* DownloadsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsViewModel.swift; sourceTree = "<group>"; };
+		0000001A /* ProxyViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyViewModel.swift; sourceTree = "<group>"; };
+		0000001C /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
+		0000001E /* ProxyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyService.swift; sourceTree = "<group>"; };
+		00000020 /* DownloadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadService.swift; sourceTree = "<group>"; };
+		00000022 /* DirectoryParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryParser.swift; sourceTree = "<group>"; };
+		00000024 /* StorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageService.swift; sourceTree = "<group>"; };
+		00000026 /* NetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkService.swift; sourceTree = "<group>"; };
+		00000028 /* SOCKS5Proxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SOCKS5Proxy.swift; sourceTree = "<group>"; };
+		0000002A /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		0000002C /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		0000002E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0000002F /* DirXplore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DirXplore.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		00000030 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00000031 /* Entitlements.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Entitlements.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		00000032 = {
+			isa = PBXGroup;
+			children = (
+				00000033 /* DirXplore */,
+				00000034 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		00000034 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0000002F /* DirXplore.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		00000033 /* DirXplore */ = {
+			isa = PBXGroup;
+			children = (
+				00000035 /* App */,
+				00000036 /* Models */,
+				00000037 /* Views */,
+				00000038 /* ViewModels */,
+				00000039 /* Services */,
+				0000003A /* Utilities */,
+				0000003B /* Resources */,
+				00000030 /* Info.plist */,
+				00000031 /* Entitlements.plist */,
+			);
+			path = DirXplore;
+			sourceTree = "<group>";
+		};
+		00000035 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				00000002 /* DirXploreApp.swift */,
+				00000004 /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		00000036 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				0000000E /* DirectoryEntry.swift */,
+				00000010 /* DownloadTaskItem.swift */,
+				00000012 /* ProxyConfig.swift */,
+				00000014 /* Bookmark.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		00000037 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				00000006 /* BrowserView.swift */,
+				00000008 /* DownloadsView.swift */,
+				0000000A /* ProxyView.swift */,
+				0000000C /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		00000038 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				00000016 /* BrowserViewModel.swift */,
+				00000018 /* DownloadsViewModel.swift */,
+				0000001A /* ProxyViewModel.swift */,
+				0000001C /* SettingsViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		00000039 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				0000001E /* ProxyService.swift */,
+				00000020 /* DownloadService.swift */,
+				00000022 /* DirectoryParser.swift */,
+				00000024 /* StorageService.swift */,
+				00000026 /* NetworkService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		0000003A /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				00000028 /* SOCKS5Proxy.swift */,
+				0000002A /* LiveActivityManager.swift */,
+				0000002C /* Extensions.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		0000003B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0000002E /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0000003C /* DirXplore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000003D;
+			buildPhases = (
+				0000003E /* Sources */,
+				0000003F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DirXplore;
+			productName = DirXplore;
+			productReference = 0000002F;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		00000040 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 00000041;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 00000032;
+			productRefGroup = 00000034;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0000003C /* DirXplore */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0000003F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0000002D /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0000003E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				00000001 /* DirXploreApp.swift in Sources */,
+				00000003 /* ContentView.swift in Sources */,
+				00000005 /* BrowserView.swift in Sources */,
+				00000007 /* DownloadsView.swift in Sources */,
+				00000009 /* ProxyView.swift in Sources */,
+				0000000B /* SettingsView.swift in Sources */,
+				0000000D /* DirectoryEntry.swift in Sources */,
+				0000000F /* DownloadTaskItem.swift in Sources */,
+				00000011 /* ProxyConfig.swift in Sources */,
+				00000013 /* Bookmark.swift in Sources */,
+				00000015 /* BrowserViewModel.swift in Sources */,
+				00000017 /* DownloadsViewModel.swift in Sources */,
+				00000019 /* ProxyViewModel.swift in Sources */,
+				0000001B /* SettingsViewModel.swift in Sources */,
+				0000001D /* ProxyService.swift in Sources */,
+				0000001F /* DownloadService.swift in Sources */,
+				00000021 /* DirectoryParser.swift in Sources */,
+				00000023 /* StorageService.swift in Sources */,
+				00000025 /* NetworkService.swift in Sources */,
+				00000027 /* SOCKS5Proxy.swift in Sources */,
+				00000029 /* LiveActivityManager.swift in Sources */,
+				0000002B /* Extensions.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		00000042 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		00000043 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		00000044 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "DirXplore/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = DirXplore;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rakib.dirxplore;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		00000045 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "DirXplore/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = DirXplore;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rakib.dirxplore;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0000003D /* Build configuration list for PBXNativeTarget "DirXplore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000044 /* Debug */,
+				00000045 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		00000041 /* Build configuration list for PBXProject "DirXplore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000042 /* Debug */,
+				00000043 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 00000040 /* Project object */;
+}

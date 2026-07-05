@@ -1,0 +1,38 @@
+# Xcode
+*.xcworkspace
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.xcarchive
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods
+Pods/
+!Podfile
+!Podfile.lock
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# macOS
+.DS_Store
+*.swp
+*.lock
+*~
+
+# Xcode build
+build/
+*.build/
+
+# Debug
+Logs/
+*.log
