@@ -13,8 +13,6 @@ class DirectoryParser {
             normalizedBase = URL(string: baseURL.absoluteString + "/") ?? baseURL
         }
 
-        let safePathChars = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "()'"))
-
         let pattern = "<a\\s+href=\"([^\"]+)\">([^<]+)</a>"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return entries
@@ -28,29 +26,30 @@ class DirectoryParser {
             let hrefRange = Range(match.range(at: 1), in: html)!
             let textRange = Range(match.range(at: 2), in: html)!
 
-            let href = String(html[hrefRange]).removingPercentEncoding ?? String(html[hrefRange])
+            let rawHref = String(html[hrefRange])
+            let decodedHref = rawHref.removingPercentEncoding ?? rawHref
             let text = String(html[textRange]).trimmingCharacters(in: .whitespacesAndNewlines)
 
-            guard !href.hasPrefix("?") && !href.hasPrefix("#") else { continue }
+            guard !decodedHref.hasPrefix("?") && !decodedHref.hasPrefix("#") else { continue }
 
-            let isDirectory = href.hasSuffix("/")
+            let isDirectory = decodedHref.hasSuffix("/")
             let name = isDirectory ? String(text.dropLast()) : text
 
             guard !name.isEmpty && name != "Parent Directory" else { continue }
 
             let entryURL: URL
-            if let resolved = URL(string: href, relativeTo: normalizedBase) {
+            if let resolved = URL(string: rawHref, relativeTo: normalizedBase) {
                 entryURL = resolved
-            } else if let encoded = href.addingPercentEncoding(withAllowedCharacters: safePathChars),
+            } else if let encoded = rawHref.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                       let resolved = URL(string: encoded, relativeTo: normalizedBase) {
                 entryURL = resolved
             } else {
-                entryURL = normalizedBase.appendingPathComponent(href)
+                entryURL = normalizedBase.appendingPathComponent(decodedHref)
             }
 
             entries.append(DirectoryEntry(
                 name: name,
-                path: href,
+                path: decodedHref,
                 isDirectory: isDirectory,
                 size: 0,
                 modificationDate: nil,

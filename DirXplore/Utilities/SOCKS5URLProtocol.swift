@@ -13,7 +13,21 @@ class SOCKS5URLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
         guard let proxy = proxyConfig, proxy.isEnabled else { return false }
         if URLProtocol.property(forKey: handledKey, in: request) != nil { return false }
-        return request.url?.scheme == "http"
+        guard request.url?.scheme == "http" else { return false }
+        if let host = request.url?.host, isLocalAddress(host) { return false }
+        return true
+    }
+
+    private class func isLocalAddress(_ host: String) -> Bool {
+        if host == "localhost" || host.hasSuffix(".local") { return true }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4, let first = UInt8(parts[0]) else { return false }
+        if first == 10 { return true }
+        if first == 127 { return true }
+        if first == 169 && parts.count > 1, let second = UInt8(parts[1]), second == 254 { return true }
+        if first == 172 && parts.count > 1, let second = UInt8(parts[1]), (16...31).contains(second) { return true }
+        if first == 192 && parts.count > 1, let second = UInt8(parts[1]), second == 168 { return true }
+        return false
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
