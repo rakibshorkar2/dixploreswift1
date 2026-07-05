@@ -6,12 +6,15 @@ struct BrowserView: View {
     @State private var showAddBookmark = false
     @State private var bookmarkTitle = ""
     @State private var showSearch = false
+    @State private var showSortPicker = false
+    @State private var showHistory = false
 
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
                 urlBar
                 searchBar
+                sortBar
                 contentArea
             }
             .navigationTitle("Browser")
@@ -34,8 +37,14 @@ struct BrowserView: View {
                     Button(action: { showSearch.toggle() }) {
                         Image(systemName: "magnifyingglass")
                     }
-                    Button(action: { viewModel.refresh() }) {
-                        Image(systemName: "arrow.clockwise")
+                    if viewModel.isLoading {
+                        Button(action: { viewModel.stopLoading() }) {
+                            Image(systemName: "xmark.circle")
+                        }
+                    } else {
+                        Button(action: { viewModel.refresh() }) {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
                     Button(action: { showBookmarks.toggle() }) {
                         Image(systemName: "bookmark")
@@ -44,6 +53,9 @@ struct BrowserView: View {
             }
             .sheet(isPresented: $showBookmarks) {
                 bookmarksView
+            }
+            .sheet(isPresented: $showHistory) {
+                historyView
             }
             .alert("Add Bookmark", isPresented: $showAddBookmark) {
                 TextField("Title", text: $bookmarkTitle)
@@ -116,6 +128,49 @@ struct BrowserView: View {
         }
     }
 
+    private var sortBar: some View {
+        Group {
+            if !viewModel.directoryEntries.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(SortField.allCases, id: \.self) { field in
+                        Button(action: {
+                            if viewModel.sortField == field {
+                                viewModel.sortAscending.toggle()
+                            } else {
+                                viewModel.sortField = field
+                                viewModel.sortAscending = true
+                            }
+                        }) {
+                            HStack(spacing: 2) {
+                                Text(field.rawValue)
+                                    .font(.caption)
+                                if viewModel.sortField == field {
+                                    Image(systemName: viewModel.sortAscending ? "arrow.up" : "arrow.down")
+                                        .font(.caption2)
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(viewModel.sortField == field ? Color.accentColor.opacity(0.15) : Color.clear)
+                            .cornerRadius(6)
+                        }
+                        .foregroundColor(viewModel.sortField == field ? .accentColor : .secondary)
+                    }
+
+                    Spacer()
+
+                    Button(action: { showHistory.toggle() }) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
     @ViewBuilder
     private var contentArea: some View {
         if let error = viewModel.errorMessage {
@@ -136,7 +191,11 @@ struct BrowserView: View {
             Spacer()
         } else if viewModel.isLoading && viewModel.directoryEntries.isEmpty {
             Spacer()
-            ProgressView("Loading...")
+            VStack(spacing: 12) {
+                ProgressView("Loading...")
+                Button("Cancel", role: .cancel) { viewModel.stopLoading() }
+                    .buttonStyle(.bordered)
+            }
             Spacer()
         } else if viewModel.directoryEntries.isEmpty {
             Spacer()
@@ -164,10 +223,17 @@ struct BrowserView: View {
                                 Text(entry.name)
                                     .lineLimit(1)
                                     .foregroundColor(.primary)
-                                if !entry.isDirectory {
-                                    Text(entry.formattedSize)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                HStack(spacing: 8) {
+                                    if !entry.isDirectory {
+                                        Text(entry.formattedSize)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    if let date = entry.modificationDate {
+                                        Text(date.formatted(date: .numeric, time: .shortened))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
 
@@ -179,6 +245,16 @@ struct BrowserView: View {
                         }
                     }
                     .contextMenu {
+                        Button(action: {
+                            viewModel.copyToClipboard(url: entry.url)
+                        }) {
+                            Label("Copy URL", systemImage: "doc.on.doc")
+                        }
+                        Button(action: {
+                            viewModel.openInSafari(url: entry.url)
+                        }) {
+                            Label("Open in Safari", systemImage: "safari")
+                        }
                         if !entry.isDirectory {
                             Button(action: { viewModel.openEntry(entry) }) {
                                 Label("Download", systemImage: "arrow.down.circle")
@@ -230,6 +306,42 @@ struct BrowserView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     EditButton()
+                }
+            }
+        }
+    }
+
+    private var historyView: some View {
+        NavigationView {
+            List {
+                if viewModel.recentURLs.isEmpty {
+                    Text("No history yet")
+                        .foregroundColor(.secondary)
+                }
+                ForEach(viewModel.recentURLs, id: \.self) { urlString in
+                    Button(action: {
+                        viewModel.currentURL = urlString
+                        viewModel.navigateToURL(urlString)
+                        showHistory = false
+                    }) {
+                        Text(urlString)
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                    }
+                }
+                if !viewModel.recentURLs.isEmpty {
+                    Button(role: .destructive) {
+                        viewModel.clearHistory()
+                    } label: {
+                        Text("Clear History")
+                    }
+                }
+            }
+            .navigationTitle("History")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") { showHistory = false }
                 }
             }
         }

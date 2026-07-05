@@ -21,3 +21,28 @@ struct ProxyConfig: Codable, Identifiable {
         isEnabled: false
     )
 }
+
+struct ProxyProfile: Identifiable, Codable, Hashable {
+    let id: UUID
+    var name: String
+    var host: String
+    var port: Int
+    var username: String
+    var password: String
+    var dateAdded: Date
+
+    init(id: UUID = UUID(), name: String, host: String, port: Int,
+         username: String, password: String, dateAdded: Date = Date()) {
+        self.id = id
+        self.name = name
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.dateAdded = dateAdded
+    }
+
+    var displayString: String {
+        "\(host):\(port)"
+    }
+}

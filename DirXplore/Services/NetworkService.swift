@@ -36,9 +36,25 @@ class NetworkService: ObservableObject {
 
     func fetchDirectoryListing(url: URL) async throws -> [DirectoryEntry] {
         var currentURL = url
-        for _ in 0..<5 {
-            let request = URLRequest(url: currentURL, timeoutInterval: 30)
-            let (data, response) = try await session.data(for: request)
+        for attempt in 0..<5 {
+            let request = URLRequest(url: currentURL, timeoutInterval: 15)
+            let (data, response): (Data, URLResponse)
+            do {
+                (data, response) = try await session.data(for: request)
+            } catch {
+                if attempt == 0 {
+                    let altURL = currentURL.absoluteString.hasSuffix("/")
+                        ? URL(string: String(currentURL.absoluteString.dropLast())) ?? currentURL
+                        : URL(string: currentURL.absoluteString + "/") ?? currentURL
+                    if altURL != currentURL {
+                        currentURL = altURL
+                    } else {
+                        throw error
+                    }
+                    continue
+                }
+                throw error
+            }
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.invalidResponse
@@ -52,6 +68,15 @@ class NetworkService: ObservableObject {
             }
 
             guard httpResponse.statusCode == 200 else {
+                if attempt == 0 {
+                    let altURL = currentURL.absoluteString.hasSuffix("/")
+                        ? URL(string: String(currentURL.absoluteString.dropLast())) ?? currentURL
+                        : URL(string: currentURL.absoluteString + "/") ?? currentURL
+                    if altURL != currentURL {
+                        currentURL = altURL
+                        continue
+                    }
+                }
                 throw NetworkError.httpError(httpResponse.statusCode)
             }
 

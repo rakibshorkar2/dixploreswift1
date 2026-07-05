@@ -12,9 +12,16 @@ class ProxyViewModel: ObservableObject {
     @Published var isTestingPing = false
     @Published var pingResult: String?
     @Published var connectionTestResult: String?
+    @Published var profiles: [ProxyProfile] = []
+    @Published var selectedProfileID: UUID?
+    @Published var connectionHistory: [String] = []
 
     private let proxyService = ProxyService.shared
     private let defaults = UserDefaults.standard
+
+    var selectedProfile: ProxyProfile? {
+        profiles.first { $0.id == selectedProfileID }
+    }
 
     var proxyConfig: ProxyConfig {
         ProxyConfig(
@@ -27,11 +34,51 @@ class ProxyViewModel: ObservableObject {
     }
 
     init() {
+        loadProfiles()
         loadConfig()
         if isEnabled {
             NetworkService.shared.setProxy(proxyConfig)
         }
     }
+
+    // MARK: - Profile Management
+
+    func loadProfile(_ profile: ProxyProfile) {
+        host = profile.host
+        port = String(profile.port)
+        username = profile.username
+        password = profile.password
+        selectedProfileID = profile.id
+        saveConfig()
+    }
+
+    func saveAsProfile(name: String) {
+        let profile = ProxyProfile(
+            name: name,
+            host: host,
+            port: Int(port) ?? 1088,
+            username: username,
+            password: password
+        )
+        profiles.append(profile)
+        selectedProfileID = profile.id
+        saveProfiles()
+    }
+
+    func deleteProfile(_ profile: ProxyProfile) {
+        profiles.removeAll { $0.id == profile.id }
+        if selectedProfileID == profile.id {
+            selectedProfileID = profiles.first?.id
+        }
+        saveProfiles()
+    }
+
+    func copyConfigToClipboard() {
+        let text = "\(host):\(port)@\(username):\(password)"
+        UIPasteboard.general.string = text
+    }
+
+    // MARK: - Test Actions
 
     func testPing() {
         guard !host.isEmpty, let portInt = Int(port) else {
@@ -48,8 +95,10 @@ class ProxyViewModel: ObservableObject {
 
             if let latency = result {
                 pingResult = String(format: "%.1f ms", latency * 1000)
+                connectionHistory.insert("Ping: \(pingResult!) at \(Date().formatted(date: .omitted, time: .shortened))", at: 0)
             } else {
                 pingResult = "Connection failed"
+                connectionHistory.insert("Ping failed at \(Date().formatted(date: .omitted, time: .shortened))", at: 0)
             }
         }
     }
@@ -73,6 +122,7 @@ class ProxyViewModel: ObservableObject {
             )
 
             connectionTestResult = success ? "SOCKS5 connection successful" : "SOCKS5 connection failed"
+            connectionHistory.insert("SOCKS5: \(connectionTestResult!) at \(Date().formatted(date: .omitted, time: .shortened))", at: 0)
         }
     }
 
@@ -91,6 +141,9 @@ class ProxyViewModel: ObservableObject {
             "isEnabled": isEnabled
         ]
         defaults.set(dict, forKey: "proxyConfig")
+        if let id = selectedProfileID {
+            defaults.set(id.uuidString, forKey: "selectedProfileID")
+        }
     }
 
     private func loadConfig() {
@@ -100,5 +153,23 @@ class ProxyViewModel: ObservableObject {
         username = dict["username"] as? String ?? "test"
         password = dict["password"] as? String ?? "test"
         isEnabled = dict["isEnabled"] as? Bool ?? false
+        if let idString = defaults.string(forKey: "selectedProfileID"),
+           let id = UUID(uuidString: idString) {
+            selectedProfileID = id
+        }
+    }
+
+    private func saveProfiles() {
+        if let data = try? JSONEncoder().encode(profiles) {
+            defaults.set(data, forKey: "proxyProfiles")
+        }
+    }
+
+    private func loadProfiles() {
+        guard let data = defaults.data(forKey: "proxyProfiles"),
+              let items = try? JSONDecoder().decode([ProxyProfile].self, from: data) else {
+            return
+        }
+        profiles = items
     }
 }
