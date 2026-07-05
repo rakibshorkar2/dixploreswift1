@@ -252,6 +252,7 @@
 				00000023 /* StorageService.swift in Sources */,
 				00000025 /* NetworkService.swift in Sources */,
 				00000027 /* SOCKS5Proxy.swift in Sources */,
+				00000047 /* SOCKS5URLProtocol.swift in Sources */,
 				00000029 /* LiveActivityManager.swift in Sources */,
 				0000002B /* Extensions.swift in Sources */,
 			);
