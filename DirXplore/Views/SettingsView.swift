@@ -131,6 +131,11 @@ struct SettingsView: View {
             .onChange(of: settingsVM.keepScreenAwake) { _, _ in
                 settingsVM.saveSettings()
                 UIApplication.shared.isIdleTimerDisabled = settingsVM.keepScreenAwake
+                if settingsVM.keepScreenAwake {
+                    settingsVM.scheduleAwakeTimer()
+                } else {
+                    settingsVM.cancelAwakeTimer()
+                }
             }
 
             if settingsVM.keepScreenAwake {
@@ -144,6 +149,7 @@ struct SettingsView: View {
                     Slider(value: $settingsVM.screenAwakeTimer, in: 0...60, step: 1)
                         .onChange(of: settingsVM.screenAwakeTimer) { _, _ in
                             settingsVM.saveSettings()
+                            settingsVM.scheduleAwakeTimer()
                         }
                 }
             }

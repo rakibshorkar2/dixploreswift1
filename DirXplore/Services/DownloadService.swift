@@ -1,6 +1,9 @@
 import Foundation
 import BackgroundTasks
 import ActivityKit
+import UIKit
+import UserNotifications
+import Network
 
 @MainActor
 class DownloadService: NSObject, ObservableObject {
@@ -12,6 +15,9 @@ class DownloadService: NSObject, ObservableObject {
     private var urlSession: URLSession!
     var downloadTasks: [UUID: URLSessionDownloadTask] = [:]
     var progressObservers: [UUID: NSKeyValueObservation] = [:]
+    private let defaults = UserDefaults.standard
+    private let networkMonitor = NWPathMonitor()
+    private var isMonitoring = false
 
     override init() {
         super.init()
@@ -19,9 +25,35 @@ class DownloadService: NSObject, ObservableObject {
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
         self.urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        startBatteryMonitoring()
+        startNetworkMonitoring()
+    }
+
+    private func canStartDownload() -> Bool {
+        let limit = defaults.double(forKey: "maxDownloadLimit")
+        if limit > 0 && activeDownloads.count >= Int(limit) { return false }
+        if defaults.bool(forKey: "wifiOnly") {
+            let path = networkMonitor.currentPath
+            if path.status != .satisfied || !path.usesInterfaceType(.wifi) { return false }
+        }
+        return true
     }
 
     func startDownload(url: URL) {
+        guard canStartDownload() else {
+            let failed = DownloadTaskItem(
+                url: url,
+                filename: url.lastPathComponent,
+                status: .failed,
+                progress: 0,
+                totalBytes: 0,
+                downloadedBytes: 0,
+                startDate: Date()
+            )
+            completedDownloads.append(failed)
+            return
+        }
+
         let task = DownloadTaskItem(
             url: url,
             filename: url.lastPathComponent,
@@ -33,6 +65,7 @@ class DownloadService: NSObject, ObservableObject {
         )
 
         activeDownloads[task.id] = task
+        hapticFeedback()
 
         let downloadTask = urlSession.downloadTask(with: url)
         downloadTasks[task.id] = downloadTask
@@ -47,6 +80,53 @@ class DownloadService: NSObject, ObservableObject {
 
         downloadTask.resume()
         startLiveActivity(for: task)
+    }
+
+    private func hapticFeedback() {
+        guard defaults.object(forKey: "hapticFeedback") as? Bool ?? true else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    private func sendCompletionNotification(filename: String, success: Bool) {
+        guard defaults.object(forKey: "notificationsEnabled") as? Bool ?? true else { return }
+        let content = UNMutableNotificationContent()
+        content.title = success ? "Download Complete" : "Download Failed"
+        content.body = success ? "\(filename) has been downloaded." : "\(filename) download failed."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func startBatteryMonitoring() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(batteryLevelChanged),
+            name: UIDevice.batteryLevelDidChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func batteryLevelChanged() {
+        guard defaults.object(forKey: "pauseAtBattery20") as? Bool ?? true else { return }
+        let level = UIDevice.current.batteryLevel
+        if level >= 0 && level <= 0.20 && !activeDownloads.isEmpty {
+            pauseAll()
+        }
+    }
+
+    private func startNetworkMonitoring() {
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            guard let self, defaults.bool(forKey: "wifiOnly") else { return }
+            if path.status != .satisfied || !path.usesInterfaceType(.wifi) {
+                Task { @MainActor in self.pauseAll() }
+            }
+        }
+        networkMonitor.start(queue: DispatchQueue.global())
     }
 
     func pauseDownload(id: UUID) {
@@ -175,7 +255,7 @@ extension DownloadService: URLSessionDownloadDelegate {
 
         StorageService.shared.saveDownloadedFile(from: location, filename: filename)
 
-        Task { @MainActor [id] in
+        Task { @MainActor [id, filename] in
             DownloadService.shared.activeDownloads[id]?.status = .completed
             DownloadService.shared.activeDownloads[id]?.progress = 1.0
 
@@ -184,6 +264,8 @@ extension DownloadService: URLSessionDownloadDelegate {
             }
 
             DownloadService.shared.endLiveActivity(for: id)
+            DownloadService.shared.sendCompletionNotification(filename: filename, success: true)
+            DownloadService.shared.hapticFeedback()
         }
 
         if let observer = progressObservers[id] {
@@ -198,6 +280,9 @@ extension DownloadService: URLSessionDownloadDelegate {
         if let error = error as? URLError, error.code != .cancelled {
             Task { @MainActor [id] in
                 DownloadService.shared.activeDownloads[id]?.status = .failed
+                if let filename = DownloadService.shared.activeDownloads[id]?.filename {
+                    DownloadService.shared.sendCompletionNotification(filename: filename, success: false)
+                }
             }
         }
     }

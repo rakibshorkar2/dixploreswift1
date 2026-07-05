@@ -68,6 +68,21 @@ class SettingsViewModel: ObservableObject {
         screenAwakeTimer = defaults.double(forKey: "screenAwakeTimer")
     }
 
+    private var awakeTimerWorkItem: DispatchWorkItem?
+
+    func scheduleAwakeTimer() {
+        awakeTimerWorkItem?.cancel()
+        guard keepScreenAwake, screenAwakeTimer > 0 else { return }
+        let item = DispatchWorkItem { UIApplication.shared.isIdleTimerDisabled = false }
+        awakeTimerWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + screenAwakeTimer * 60, execute: item)
+    }
+
+    func cancelAwakeTimer() {
+        awakeTimerWorkItem?.cancel()
+        awakeTimerWorkItem = nil
+    }
+
     func saveSettings() {
         defaults.set(maxDownloadLimit, forKey: "maxDownloadLimit")
         defaults.set(speedLimit, forKey: "speedLimit")

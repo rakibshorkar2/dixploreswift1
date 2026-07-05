@@ -1,5 +1,7 @@
 import SwiftUI
 import BackgroundTasks
+import UIKit
+import UserNotifications
 
 @main
 struct DirXploreApp: App {
@@ -13,8 +15,18 @@ struct DirXploreApp: App {
                 .onAppear {
                     registerBackgroundTasks()
                     StorageService.shared.ensureDownloadsDirectory()
+                    applyLaunchSettings()
+                    requestNotificationPermission()
                 }
         }
+    }
+
+    private func applyLaunchSettings() {
+        UIApplication.shared.isIdleTimerDisabled = settingsVM.keepScreenAwake
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     private func registerBackgroundTasks() {
