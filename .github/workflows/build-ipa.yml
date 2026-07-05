@@ -32,13 +32,9 @@ jobs:
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>development</string>
+              <string>debugging</string>
               <key>signingStyle</key>
               <string>manual</string>
-              <key>signingCertificate</key>
-              <string>-</string>
-              <key>teamID</key>
-              <string></string>
               <key>generateAppStoreInformation</key>
               <false/>
               <key>compileBitcode</key>
