@@ -24,27 +24,6 @@ jobs:
       - name: Show buildable schemes
         run: xcodebuild -list -project DirXplore.xcodeproj
 
-      - name: Create export options plist
-        run: |
-          cat > ExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>debugging</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>generateAppStoreInformation</key>
-              <false/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>uploadSymbols</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
-
       - name: Build archive
         run: |
           xcodebuild clean archive \
@@ -57,19 +36,13 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Export unsigned IPA
+      - name: Create unsigned IPA from archive
         run: |
-          xcodebuild -exportArchive \
-            -archivePath DirXplore.xcarchive \
-            -exportPath ./output \
-            -exportOptionsPlist ExportOptions.plist \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO
-
-      - name: Rename IPA
-        run: |
-          mv ./output/DirXplore.ipa ./output/DirXplore_unsigned.ipa
+          mkdir -p output/Payload
+          cp -r "DirXplore.xcarchive/Products/Applications/DirXplore.app" output/Payload/
+          cd output
+          zip -qr DirXplore_unsigned.ipa Payload/
+          rm -rf Payload
 
       - name: Create GitHub Release
         id: create_release
