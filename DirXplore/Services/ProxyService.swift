@@ -11,32 +11,40 @@ class ProxyService: ObservableObject {
             port: NWEndpoint.Port(rawValue: UInt16(port)) ?? 1080,
             using: .tcp
         )
-        connection.start(queue: .global())
 
         return await withCheckedContinuation { continuation in
+            let guardLock = NSLock()
             var didResume = false
+
             let timeoutTask = DispatchWorkItem {
-                guard !didResume else { return }
-                didResume = true
+                guardLock.lock()
+                let shouldResume = !didResume
+                if shouldResume { didResume = true }
+                guardLock.unlock()
+                guard shouldResume else { return }
                 connection.cancel()
                 continuation.resume(returning: nil)
             }
 
             connection.stateUpdateHandler = { state in
-                if !didResume, case .ready = state {
-                    didResume = true
-                    timeoutTask.cancel()
-                    let latency = Date().timeIntervalSince(start)
-                    connection.cancel()
-                    continuation.resume(returning: latency)
-                } else if !didResume, case .failed = state {
-                    didResume = true
-                    timeoutTask.cancel()
-                    connection.cancel()
+                guardLock.lock()
+                let shouldResume = !didResume
+                if shouldResume { didResume = true }
+                guardLock.unlock()
+                guard shouldResume else { return }
+
+                timeoutTask.cancel()
+                connection.cancel()
+
+                switch state {
+                case .ready:
+                    continuation.resume(returning: Date().timeIntervalSince(start))
+                default:
                     continuation.resume(returning: nil)
                 }
             }
 
+            connection.start(queue: .global())
             DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutTask)
         }
     }
@@ -48,15 +56,20 @@ class ProxyService: ObservableObject {
             port: NWEndpoint.Port(rawValue: UInt16(port)) ?? 1080,
             using: .tcp
         )
-        connection.start(queue: .global())
 
         return await withCheckedContinuation { continuation in
+            let guardLock = NSLock()
             var didResume = false
+
             connection.stateUpdateHandler = { state in
-                guard !didResume else { return }
+                guardLock.lock()
+                let shouldResume = !didResume
+                if shouldResume { didResume = true }
+                guardLock.unlock()
+                guard shouldResume else { return }
+
                 switch state {
                 case .ready:
-                    didResume = true
                     self.performSOCKS5Handshake(connection: connection,
                                                   username: username,
                                                   password: password,
@@ -66,13 +79,14 @@ class ProxyService: ObservableObject {
                         continuation.resume(returning: success)
                     }
                 case .failed, .cancelled:
-                    didResume = true
                     connection.cancel()
                     continuation.resume(returning: false)
                 default:
                     break
                 }
             }
+
+            connection.start(queue: .global())
         }
     }
 

@@ -10,8 +10,8 @@ class DownloadService: NSObject, ObservableObject {
     @Published var completedDownloads: [DownloadTaskItem] = []
 
     private var urlSession: URLSession!
-    private var downloadTasks: [UUID: URLSessionDownloadTask] = [:]
-    private var progressObservers: [UUID: NSKeyValueObservation] = [:]
+    var downloadTasks: [UUID: URLSessionDownloadTask] = [:]
+    var progressObservers: [UUID: NSKeyValueObservation] = [:]
 
     override init() {
         super.init()
@@ -52,9 +52,10 @@ class DownloadService: NSObject, ObservableObject {
     func pauseDownload(id: UUID) {
         guard activeDownloads[id] != nil else { return }
         activeDownloads[id]?.status = .paused
-        downloadTasks[id]?.cancel(byProducingResumeData: { [weak self] resumeData in
+        let pausedID = id
+        downloadTasks[id]?.cancel(byProducingResumeData: { resumeData in
             Task { @MainActor in
-                self?.activeDownloads[id]?.resumeData = resumeData
+                DownloadService.shared.activeDownloads[pausedID]?.resumeData = resumeData
             }
         })
     }
@@ -164,29 +165,35 @@ struct DownloadProgressAttributes: ActivityAttributes {
 extension DownloadService: URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
-        guard let id = downloadTasks.first(where: { $0.value == downloadTask })?.key else { return }
+        guard let id = downloadTasks.first(where: { $0.value == downloadTask })?.key,
+              let filename = downloadTask.originalRequest?.url?.lastPathComponent
+        else { return }
 
-        Task { @MainActor in
-            let destURL = StorageService.shared.saveDownloadedFile(from: location, filename: downloadTask.originalRequest?.url?.lastPathComponent ?? "file")
-            self.activeDownloads[id]?.status = .completed
-            self.activeDownloads[id]?.progress = 1.0
+        StorageService.shared.saveDownloadedFile(from: location, filename: filename)
 
-            if let item = self.activeDownloads[id] {
-                self.completedDownloads.append(item)
+        Task { @MainActor [id] in
+            DownloadService.shared.activeDownloads[id]?.status = .completed
+            DownloadService.shared.activeDownloads[id]?.progress = 1.0
+
+            if let item = DownloadService.shared.activeDownloads[id] {
+                DownloadService.shared.completedDownloads.append(item)
             }
 
-            self.endLiveActivity(for: id)
-            self.progressObservers[id]?.invalidate()
-            self.progressObservers.removeValue(forKey: id)
-            self.downloadTasks.removeValue(forKey: id)
+            DownloadService.shared.endLiveActivity(for: id)
         }
+
+        if let observer = progressObservers[id] {
+            observer.invalidate()
+            progressObservers.removeValue(forKey: id)
+        }
+        downloadTasks.removeValue(forKey: id)
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let id = downloadTasks.first(where: { $0.value == task })?.key else { return }
         if let error = error as? URLError, error.code != .cancelled {
-            Task { @MainActor in
-                self.activeDownloads[id]?.status = .failed
+            Task { @MainActor [id] in
+                DownloadService.shared.activeDownloads[id]?.status = .failed
             }
         }
     }
@@ -195,11 +202,11 @@ extension DownloadService: URLSessionDownloadDelegate {
                     didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
         guard let id = downloadTasks.first(where: { $0.value == downloadTask })?.key else { return }
-        Task { @MainActor in
-            self.activeDownloads[id]?.downloadedBytes = totalBytesWritten
-            self.activeDownloads[id]?.totalBytes = totalBytesExpectedToWrite
+        Task { @MainActor [id, totalBytesWritten, totalBytesExpectedToWrite] in
+            DownloadService.shared.activeDownloads[id]?.downloadedBytes = totalBytesWritten
+            DownloadService.shared.activeDownloads[id]?.totalBytes = totalBytesExpectedToWrite
             if totalBytesExpectedToWrite > 0 {
-                self.activeDownloads[id]?.progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+                DownloadService.shared.activeDownloads[id]?.progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             }
         }
     }
