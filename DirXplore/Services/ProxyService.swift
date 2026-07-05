@@ -43,13 +43,21 @@ class ProxyService: ObservableObject {
             }
 
             connection.stateUpdateHandler = { state in
-                guard flag.claim() else { return }
-                timeoutTask.cancel()
-                connection.cancel()
-                if case .ready = state {
+                switch state {
+                case .ready:
+                    guard flag.claim() else { return }
+                    timeoutTask.cancel()
+                    connection.cancel()
                     continuation.resume(returning: Date().timeIntervalSince(start))
-                } else {
+                case .failed, .cancelled:
+                    guard flag.claim() else { return }
+                    timeoutTask.cancel()
+                    connection.cancel()
                     continuation.resume(returning: nil)
+                case .preparing, .waiting:
+                    break
+                @unknown default:
+                    break
                 }
             }
 

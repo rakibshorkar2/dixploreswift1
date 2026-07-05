@@ -3,9 +3,7 @@ import Foundation
 class NetworkService: ObservableObject {
     static let shared = NetworkService()
     private var session: URLSession
-    private var proxyConfig: ProxyConfig? {
-        didSet { rebuildSession() }
-    }
+    private var proxyConfig: ProxyConfig?
 
     init() {
         let config = URLSessionConfiguration.default
@@ -20,11 +18,11 @@ class NetworkService: ObservableObject {
         config.timeoutIntervalForResource = 60
 
         if let proxy = proxyConfig, proxy.isEnabled {
-            config.connectionProxyDictionary = [
-                "SOCKSEnable": NSNumber(value: true),
-                "SOCKSProxy": proxy.host,
-                "SOCKSPort": NSNumber(value: proxy.port)
-            ]
+            config.protocolClasses = [SOCKS5URLProtocol.self]
+            SOCKS5URLProtocol.proxyConfig = proxy
+        } else {
+            config.protocolClasses = nil
+            SOCKS5URLProtocol.proxyConfig = nil
         }
 
         session.invalidateAndCancel()
@@ -33,6 +31,7 @@ class NetworkService: ObservableObject {
 
     func setProxy(_ config: ProxyConfig?) {
         proxyConfig = config
+        rebuildSession()
     }
 
     func fetchDirectoryListing(url: URL) async throws -> [DirectoryEntry] {
