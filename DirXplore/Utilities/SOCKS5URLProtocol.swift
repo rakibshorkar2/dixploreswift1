@@ -3,31 +3,19 @@ import Network
 
 class SOCKS5URLProtocol: URLProtocol {
     private static let handledKey = "SOCKS5ProtocolHandled"
+    private static let proxyTimeout: TimeInterval = 20
 
     private var proxyConnection: NWConnection?
     private var buffer = Data()
     private var responseDelivered = false
     private var contentLength: Int64 = -1
     private var bodyLength: Int64 = 0
+    private var didFail = false
 
     override class func canInit(with request: URLRequest) -> Bool {
         guard let proxy = proxyConfig, proxy.isEnabled else { return false }
         if URLProtocol.property(forKey: handledKey, in: request) != nil { return false }
-        guard request.url?.scheme == "http" else { return false }
-        if let host = request.url?.host, isLocalAddress(host) { return false }
-        return true
-    }
-
-    private class func isLocalAddress(_ host: String) -> Bool {
-        if host == "localhost" || host.hasSuffix(".local") { return true }
-        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
-        guard parts.count == 4, let first = UInt8(parts[0]) else { return false }
-        if first == 10 { return true }
-        if first == 127 { return true }
-        if first == 169 && parts.count > 1, let second = UInt8(parts[1]), second == 254 { return true }
-        if first == 172 && parts.count > 1, let second = UInt8(parts[1]), (16...31).contains(second) { return true }
-        if first == 192 && parts.count > 1, let second = UInt8(parts[1]), second == 168 { return true }
-        return false
+        return request.url?.scheme == "http"
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -74,6 +62,11 @@ class SOCKS5URLProtocol: URLProtocol {
             }
         }
         connection.start(queue: .global())
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.proxyTimeout) { [weak self] in
+            guard let self, !self.didFail else { return }
+            fail(with: SOCKS5Error.proxyTimeout)
+        }
     }
 
     override func stopLoading() {
@@ -168,14 +161,13 @@ class SOCKS5URLProtocol: URLProtocol {
         guard let url = request.url else { fail(with: SOCKS5Error.invalidRequest); return }
 
         let method = request.httpMethod ?? "GET"
-        var path = "/"
-        if let components = URLComponents(url: url, resolvingAgainstBaseURL: true) {
-            if !components.percentEncodedPath.isEmpty {
-                path = components.percentEncodedPath
-            }
-            if let query = components.percentEncodedQuery, !query.isEmpty {
-                path += "?\(query)"
-            }
+        var path = url.absoluteURL.path
+        if !path.hasPrefix("/") { path = "/" + path }
+        let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        path = encoded.isEmpty ? "/" : encoded
+        if let query = url.query {
+            let eq = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+            path += "?\(eq)"
         }
 
         var raw = "\(method) \(path) HTTP/1.1\r\n"
@@ -292,6 +284,8 @@ class SOCKS5URLProtocol: URLProtocol {
     // MARK: - Helpers
 
     private func fail(with error: Error) {
+        guard !didFail else { return }
+        didFail = true
         client?.urlProtocol(self, didFailWithError: error)
         cleanup()
     }
@@ -331,6 +325,7 @@ enum SOCKS5Error: LocalizedError {
     case connectFailed(replyCode: UInt8?)
     case invalidRequest
     case invalidResponse
+    case proxyTimeout
 
     var errorDescription: String? {
         switch self {
@@ -345,6 +340,7 @@ enum SOCKS5Error: LocalizedError {
             return "SOCKS5 target connection failed"
         case .invalidRequest: return "Invalid HTTP request"
         case .invalidResponse: return "Invalid HTTP response"
+        case .proxyTimeout: return "SOCKS5 proxy timed out"
         }
     }
 }
