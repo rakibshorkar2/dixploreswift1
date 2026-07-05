@@ -37,7 +37,7 @@ class NetworkService: ObservableObject {
     func fetchDirectoryListing(url: URL) async throws -> [DirectoryEntry] {
         var currentURL = url
         for attempt in 0..<5 {
-            let request = URLRequest(url: currentURL, timeoutInterval: 15)
+            let request = URLRequest(url: currentURL, timeoutInterval: 30)
             let (data, response): (Data, URLResponse)
             do {
                 (data, response) = try await session.data(for: request)

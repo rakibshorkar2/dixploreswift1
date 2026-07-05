@@ -96,10 +96,11 @@ class BrowserViewModel: ObservableObject {
     }
 
     private func encodeURLIfNeeded(_ url: URL) -> URL {
-        if url.absoluteString.contains(" ") ||
-           url.absoluteString.contains("'") ||
-           url.absoluteString.contains("^") {
-            guard let encoded = url.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+        let raw = url.absoluteString
+        let problematic = CharacterSet(charactersIn: " '^()")
+        if raw.rangeOfCharacter(from: problematic) != nil {
+            let safePath = CharacterSet.urlPathAllowed.subtracting(problematic)
+            guard let encoded = raw.addingPercentEncoding(withAllowedCharacters: safePath),
                   let result = URL(string: encoded) else {
                 return url
             }

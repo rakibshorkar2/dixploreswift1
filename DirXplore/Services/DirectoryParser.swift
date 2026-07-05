@@ -13,6 +13,8 @@ class DirectoryParser {
             normalizedBase = URL(string: baseURL.absoluteString + "/") ?? baseURL
         }
 
+        let safePathChars = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "()'"))
+
         let pattern = "<a\\s+href=\"([^\"]+)\">([^<]+)</a>"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return entries
@@ -39,7 +41,7 @@ class DirectoryParser {
             let entryURL: URL
             if let resolved = URL(string: href, relativeTo: normalizedBase) {
                 entryURL = resolved
-            } else if let encoded = href.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+            } else if let encoded = href.addingPercentEncoding(withAllowedCharacters: safePathChars),
                       let resolved = URL(string: encoded, relativeTo: normalizedBase) {
                 entryURL = resolved
             } else {
