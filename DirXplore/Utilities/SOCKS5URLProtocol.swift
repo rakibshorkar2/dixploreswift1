@@ -13,37 +13,7 @@ class SOCKS5URLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
         guard let proxy = proxyConfig, proxy.isEnabled else { return false }
         if URLProtocol.property(forKey: handledKey, in: request) != nil { return false }
-        guard let scheme = request.url?.scheme, scheme == "http" else { return false }
-        if let host = request.url?.host, isPrivateAddress(host) { return false }
-        return true
-    }
-
-    private static func isPrivateAddress(_ host: String) -> Bool {
-        if let addr = IPv4Addr(host) {
-            return addr.isPrivate || addr.isLoopback || addr.isLinkLocal
-        }
-        return false
-    }
-
-    private struct IPv4Addr {
-        let octets: [UInt8]
-        init?(_ s: String) {
-            let parts = s.split(separator: ".", omittingEmptySubsequences: false)
-            guard parts.count == 4 else { return nil }
-            var o = [UInt8]()
-            for p in parts {
-                guard let v = UInt8(p) else { return nil }
-                o.append(v)
-            }
-            octets = o
-        }
-        var isPrivate: Bool {
-            octets[0] == 10
-            || (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31)
-            || (octets[0] == 192 && octets[1] == 168)
-        }
-        var isLoopback: Bool { octets[0] == 127 }
-        var isLinkLocal: Bool { octets[0] == 169 && octets[1] == 254 }
+        return request.url?.scheme == "http"
     }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
@@ -147,9 +117,15 @@ class SOCKS5URLProtocol: URLProtocol {
 
     private func sendConnect(connection: NWConnection, targetHost: String,
                               targetPort: Int, request: URLRequest) {
-        var req = Data([0x05, 0x01, 0x00, 0x03])
-        let hostData = Data(targetHost.utf8)
-        req.append(UInt8(hostData.count)); req.append(hostData)
+        var req = Data([0x05, 0x01, 0x00])
+        if let ipv4 = parseIPv4(targetHost) {
+            req.append(0x01)
+            req.append(contentsOf: ipv4)
+        } else {
+            req.append(0x03)
+            let hostData = Data(targetHost.utf8)
+            req.append(UInt8(hostData.count)); req.append(hostData)
+        }
         var portBE = UInt16(targetPort).bigEndian
         withUnsafeBytes(of: &portBE) { req.append(contentsOf: $0) }
 
@@ -285,6 +261,17 @@ class SOCKS5URLProtocol: URLProtocol {
     private func cleanup() {
         proxyConnection?.cancel()
         proxyConnection = nil
+    }
+
+    private func parseIPv4(_ host: String) -> Data? {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var bytes = Data()
+        for p in parts {
+            guard let v = UInt8(p) else { return nil }
+            bytes.append(v)
+        }
+        return bytes
     }
 
     // MARK: - Proxy config
