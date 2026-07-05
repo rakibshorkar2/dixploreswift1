@@ -58,11 +58,10 @@ class SOCKS5URLProtocol: URLProtocol {
     private func fetch(proxy: ProxyConfig, host: String, port: UInt16,
                        requestBody: UnsafeRawPointer, requestLen: Int) throws -> socks5_result_t {
         let timeout = Self.proxyTimeout
-        // strdup creates C strings that live for the call
-        let pHost = strdup(proxy.host)
-        let tHost = strdup(host)
-        let pUser = proxy.username.flatMap { strdup($0) }
-        let pPass = proxy.password.flatMap { strdup($0) }
+        let pHost = proxy.host.withCString { strdup($0) }
+        let tHost = host.withCString { strdup($0) }
+        let pUser = proxy.username?.withCString { strdup($0) }
+        let pPass = proxy.password?.withCString { strdup($0) }
         defer {
             free(pHost); free(tHost)
             if let p = pUser { free(p) }
