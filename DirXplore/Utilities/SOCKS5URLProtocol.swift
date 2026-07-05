@@ -5,9 +5,9 @@ class SOCKS5URLProtocol: URLProtocol {
     static let proxyTimeout: TimeInterval = 30
 
     private static let workQueue = DispatchQueue(label: "com.dirxplore.socks5.io", qos: .userInitiated)
-
     private var isCancelled = false
-    private var tunnelFd: Int32 = -1
+
+    private let headerEndMarker = Data("\r\n\r\n".utf8)
 
     override class func canInit(with request: URLRequest) -> Bool {
         guard let proxy = proxyConfig, proxy.isEnabled else { return false }
@@ -29,68 +29,62 @@ class SOCKS5URLProtocol: URLProtocol {
         let mutableRequest = (request as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(true, forKey: Self.handledKey, in: mutableRequest)
         let finalRequest = mutableRequest as URLRequest
-        let timeout = Self.proxyTimeout
 
         Self.workQueue.async { [weak self] in
             guard let self else { return }
-
-            let fd: Int32
             do {
-                fd = try Socks5Client.tunnel(
-                    proxyHost: proxy.host, proxyPort: UInt16(proxy.port),
-                    targetHost: host, targetPort: UInt16(url.port ?? 80),
-                    username: proxy.username, password: proxy.password,
-                    timeout: timeout
-                )
+                let httpReq = self.buildHTTPRequest(url: url, request: finalRequest)
+                var result = try httpReq.withUnsafeBytes { rawBuf in
+                    try self.fetch(proxy: proxy, host: host, port: UInt16(url.port ?? 80),
+                                   requestBody: rawBuf.baseAddress!, requestLen: httpReq.count)
+                }
+                defer { socks5_free_result(&result) }
+                guard !self.isCancelled else { return }
+                try self.deliver(result: &result, url: url)
+            } catch let e as SocksError {
+                self.deliverError(e)
             } catch {
-                self.deliverError(error as? SocksError ?? .systemError(0, error.localizedDescription))
-                return
-            }
-
-            guard !self.isCancelled else { close(fd); return }
-            self.tunnelFd = fd
-
-            let responseData: Data
-            do {
-                responseData = try self.fetchHTTP(fd: fd, url: url,
-                                                   request: finalRequest,
-                                                   timeout: timeout)
-            } catch {
-                close(fd)
-                self.tunnelFd = -1
-                self.deliverError(error as? SocksError ?? .systemError(0, error.localizedDescription))
-                return
-            }
-
-            close(fd)
-            self.tunnelFd = -1
-
-            guard !self.isCancelled else { return }
-
-            do {
-                try self.deliverResponse(data: responseData, url: url)
-            } catch {
-                self.deliverError(error as? SocksError ?? .systemError(0, error.localizedDescription))
+                self.deliverError(.systemError(0, error.localizedDescription))
             }
         }
     }
 
     override func stopLoading() {
         isCancelled = true
-        let fd = tunnelFd
-        if fd >= 0 {
-            shutdown(fd, SHUT_RDWR)
+    }
+
+    // MARK: - C bridge
+
+    private func fetch(proxy: ProxyConfig, host: String, port: UInt16,
+                       requestBody: UnsafeRawPointer, requestLen: Int) throws -> socks5_result_t {
+        let timeout = Self.proxyTimeout
+        // strdup creates C strings that live for the call
+        let pHost = strdup(proxy.host)
+        let tHost = strdup(host)
+        let pUser = proxy.username.flatMap { strdup($0) }
+        let pPass = proxy.password.flatMap { strdup($0) }
+        defer {
+            free(pHost); free(tHost)
+            if let p = pUser { free(p) }
+            if let p = pPass { free(p) }
         }
+
+        var result = socks5_fetch(
+            pHost, UInt16(proxy.port),
+            pUser, pPass,
+            tHost, port,
+            requestBody, requestLen,
+            timeout
+        )
+        if result.success == 0 {
+            let msg = String(cString: &result.error_msg.0)
+            socks5_free_result(&result)
+            throw SocksError.proxyConnectFailed(msg)
+        }
+        return result
     }
 
-    // MARK: - HTTP over tunnel
-
-    private func fetchHTTP(fd: Int32, url: URL, request: URLRequest,
-                           timeout: TimeInterval) throws -> Data {
-        let httpReq = buildHTTPRequest(url: url, request: request)
-        try Socks5Client.sendAll(fd: fd, data: httpReq, timeout: timeout)
-        return try readFullResponse(fd: fd, timeout: timeout)
-    }
+    // MARK: - HTTP request
 
     private func buildHTTPRequest(url: URL, request: URLRequest) -> Data {
         let method = request.httpMethod ?? "GET"
@@ -127,60 +121,62 @@ class SOCKS5URLProtocol: URLProtocol {
         }
     }
 
-    // MARK: - Response reading
+    // MARK: - Response
 
-    private let headerEndMarker = Data("\r\n\r\n".utf8)
+    private func deliver(result: inout socks5_result_t, url: URL) throws {
+        guard let respPtr = result.response else {
+            throw SocksError.invalidResponse
+        }
+        let data = Data(bytes: respPtr, count: result.response_len)
+        let (code, headers, body) = try parseResponse(from: data)
 
-    private func readFullResponse(fd: Int32, timeout: TimeInterval) throws -> Data {
-        var data = try readHeaders(fd: fd, timeout: timeout)
-        let body = try readBody(fd: fd, from: data, timeout: timeout)
-        data.append(body)
-        return data
+        guard let httpResp = HTTPURLResponse(
+            url: url, statusCode: code, httpVersion: "HTTP/1.1",
+            headerFields: headers
+        ) else {
+            throw SocksError.invalidResponse
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isCancelled else { return }
+            self.client?.urlProtocol(self, didReceive: httpResp, cacheStoragePolicy: .notAllowed)
+            if !body.isEmpty {
+                self.client?.urlProtocol(self, didLoad: body)
+            }
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
     }
 
-    private func readHeaders(fd: Int32, timeout: TimeInterval) throws -> Data {
-        var data = Data()
-        while data.range(of: headerEndMarker) == nil {
-            let chunk = try Socks5Client.recvSome(fd: fd, maxLength: 65536, timeout: timeout)
-            data.append(chunk)
+    private func parseResponse(from data: Data) throws
+        -> (statusCode: Int, headers: [String: String], body: Data) {
+        guard let headerEnd = data.firstRange(of: headerEndMarker) else {
+            throw SocksError.invalidResponse
         }
-        return data
-    }
-
-    private func readBody(fd: Int32, from responseData: Data, timeout: TimeInterval) throws -> Data {
-        guard let headerEnd = responseData.firstRange(of: headerEndMarker) else { return Data() }
-        let headerPart = String(data: responseData[..<headerEnd.lowerBound], encoding: .utf8) ?? ""
-        let headers = parseHeaderFields(from: headerPart)
-        let alreadyRead = Data(responseData[headerEnd.upperBound...])
-
-        // Content-Length
-        if let clStr = headers["Content-Length"], let cl = Int(clStr) {
-            let remaining = cl - alreadyRead.count
-            if remaining > 0 {
-                let more = try Socks5Client.recvExact(fd: fd, count: remaining, timeout: timeout)
-                return alreadyRead + more
-            }
-            return alreadyRead
+        let headerPart = data[data.startIndex..<headerEnd.lowerBound]
+        guard let headerString = String(data: headerPart, encoding: .utf8) else {
+            throw SocksError.invalidResponse
+        }
+        let lines = headerString.components(separatedBy: "\r\n")
+        guard let statusLine = lines.first else { throw SocksError.invalidResponse }
+        let parts = statusLine.components(separatedBy: " ")
+        guard parts.count >= 2, let code = Int(parts[1]) else {
+            throw SocksError.invalidResponse
         }
 
-        // No Content-Length: read until connection closes
-        var body = alreadyRead
-        while true {
-            do {
-                let chunk = try Socks5Client.recvSome(fd: fd, maxLength: 65536, timeout: timeout)
-                body.append(chunk)
-            } catch SocksError.connectFailed {
-                break
-            } catch SocksError.timeout {
-                break
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+            let kv = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            if kv.count == 2 {
+                headers[kv[0].trimmingCharacters(in: .whitespaces)] =
+                    kv[1].trimmingCharacters(in: .whitespaces)
             }
         }
 
-        // Decode chunked if needed
+        var body = Data(data[headerEnd.upperBound...])
         if (headers["Transfer-Encoding"] ?? "").lowercased().contains("chunked") {
-            return try decodeChunked(body)
+            body = try decodeChunked(body)
         }
-        return body
+        return (code, headers, body)
     }
 
     private func decodeChunked(_ data: Data) throws -> Data {
@@ -206,63 +202,7 @@ class SOCKS5URLProtocol: URLProtocol {
         return result
     }
 
-    // MARK: - Parsing
-
-    private func parseHeaderFields(from headerString: String) -> [String: String] {
-        let lines = headerString.components(separatedBy: "\r\n")
-        var headers: [String: String] = [:]
-        for line in lines.dropFirst() {
-            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-            if parts.count == 2 {
-                headers[parts[0].trimmingCharacters(in: .whitespaces)] =
-                    parts[1].trimmingCharacters(in: .whitespaces)
-            }
-        }
-        return headers
-    }
-
-    private func parseResponse(from data: Data) throws
-        -> (statusCode: Int, headers: [String: String], body: Data) {
-        guard let headerEnd = data.firstRange(of: headerEndMarker) else {
-            throw SocksError.invalidResponse
-        }
-        let headerPart = data[data.startIndex..<headerEnd.lowerBound]
-        guard let headerString = String(data: headerPart, encoding: .utf8) else {
-            throw SocksError.invalidResponse
-        }
-        let lines = headerString.components(separatedBy: "\r\n")
-        guard let statusLine = lines.first else { throw SocksError.invalidResponse }
-        let statusParts = statusLine.components(separatedBy: " ")
-        guard statusParts.count >= 2, let code = Int(statusParts[1]) else {
-            throw SocksError.invalidResponse
-        }
-
-        let headers = parseHeaderFields(from: headerString)
-        let body = Data(data[headerEnd.upperBound...])
-        return (code, headers, body)
-    }
-
-    // MARK: - Client delivery
-
-    private func deliverResponse(data: Data, url: URL) throws {
-        let (code, headers, body) = try parseResponse(from: data)
-
-        guard let response = HTTPURLResponse(
-            url: url, statusCode: code, httpVersion: "HTTP/1.1",
-            headerFields: headers
-        ) else {
-            throw SocksError.invalidResponse
-        }
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.isCancelled else { return }
-            self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            if !body.isEmpty {
-                self.client?.urlProtocol(self, didLoad: body)
-            }
-            self.client?.urlProtocolDidFinishLoading(self)
-        }
-    }
+    // MARK: - Client
 
     private func deliverError(_ error: SocksError) {
         DispatchQueue.main.async { [weak self] in
@@ -275,7 +215,7 @@ class SOCKS5URLProtocol: URLProtocol {
         client?.urlProtocol(self, didFailWithError: error)
     }
 
-    // MARK: - Proxy config
+    // MARK: - Config
 
     private static var _proxyConfig: ProxyConfig?
     private static let lock = NSLock()

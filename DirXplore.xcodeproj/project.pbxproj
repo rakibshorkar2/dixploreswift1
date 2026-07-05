@@ -28,6 +28,7 @@
 		00000025 /* NetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000026; };
 		00000047 /* SOCKS5URLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000046; };
 		00000049 /* Socks5Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000048; };
+		0000004C /* Socks5Core.c in Sources */ = {isa = PBXBuildFile; fileRef = 0000004B; };
 		0000002B /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000002C; };
 		0000002D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0000002E; };
 /* End PBXBuildFile section */
@@ -56,6 +57,9 @@
 		00000048 /* Socks5Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Socks5Client.swift; sourceTree = "<group>"; };
 		0000002C /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		0000002E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0000004A /* Socks5Core.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Socks5Core.h; sourceTree = "<group>"; };
+		0000004B /* Socks5Core.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Socks5Core.c; sourceTree = "<group>"; };
+		0000004D /* Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Bridging-Header.h"; sourceTree = "<group>"; };
 		0000002F /* DirXplore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DirXplore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		00000030 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00000031 /* Entitlements.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Entitlements.plist; sourceTree = "<group>"; };
@@ -88,6 +92,7 @@
 				00000039 /* Services */,
 				0000003A /* Utilities */,
 				0000003B /* Resources */,
+				0000004D /* Bridging-Header.h */,
 				00000030 /* Info.plist */,
 				00000031 /* Entitlements.plist */,
 			);
@@ -153,6 +158,8 @@
 			children = (
 				00000046 /* SOCKS5URLProtocol.swift */,
 				00000048 /* Socks5Client.swift */,
+				0000004A /* Socks5Core.h */,
+				0000004B /* Socks5Core.c */,
 				0000002C /* Extensions.swift */,
 			);
 			path = Utilities;
@@ -250,6 +257,7 @@
 				00000025 /* NetworkService.swift in Sources */,
 				00000047 /* SOCKS5URLProtocol.swift in Sources */,
 				00000049 /* Socks5Client.swift in Sources */,
+				0000004C /* Socks5Core.c in Sources */,
 				0000002B /* Extensions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -326,6 +334,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.dirBrowser;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "DirXplore/Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -351,6 +360,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.dirBrowser;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "DirXplore/Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
