@@ -17,7 +17,7 @@ struct DirXploreApp: App {
     }
 
     private func registerBackgroundTasks() {
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.rakib.dirxplore.download", using: nil) { task in
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.example.dirBrowser.download", using: nil) { task in
             DownloadService.shared.handleBackgroundDownload(task: task as! BGProcessingTask)
         }
     }

@@ -15,7 +15,7 @@ class DownloadService: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        let config = URLSessionConfiguration.background(withIdentifier: "com.rakib.dirxplore.background")
+        let config = URLSessionConfiguration.background(withIdentifier: "com.example.dirBrowser.background")
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
         self.urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)

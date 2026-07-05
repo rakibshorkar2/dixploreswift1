@@ -37,7 +37,7 @@
     <true/>
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
-        <string>com.rakib.dirxplore.download</string>
+        <string>com.example.dirBrowser.download</string>
     </array>
     <key>UIBackgroundModes</key>
     <array>
