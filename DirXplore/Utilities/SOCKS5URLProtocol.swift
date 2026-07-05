@@ -60,8 +60,8 @@ class SOCKS5URLProtocol: URLProtocol {
         let timeout = Self.proxyTimeout
         let pHost = proxy.host.withCString { strdup($0) }
         let tHost = host.withCString { strdup($0) }
-        let pUser = proxy.username?.withCString { strdup($0) }
-        let pPass = proxy.password?.withCString { strdup($0) }
+        let pUser: UnsafeMutablePointer<CChar>? = proxy.username.isEmpty ? nil : proxy.username.withCString { strdup($0) }
+        let pPass: UnsafeMutablePointer<CChar>? = proxy.password.isEmpty ? nil : proxy.password.withCString { strdup($0) }
         defer {
             free(pHost); free(tHost)
             if let p = pUser { free(p) }
