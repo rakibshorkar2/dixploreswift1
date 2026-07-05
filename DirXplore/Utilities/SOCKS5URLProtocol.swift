@@ -34,10 +34,14 @@ class SOCKS5URLProtocol: URLProtocol {
             guard let self else { return }
             do {
                 let httpReq = self.buildHTTPRequest(url: url, request: finalRequest)
-                var result = try httpReq.withUnsafeBytes { rawBuf in
+                // fetch() cleans up its own result on failure (calls
+                // socks5_free_result before throwing). On success we
+                // own the returned struct and must free response.
+                let rawResult = try httpReq.withUnsafeBytes { rawBuf in
                     try self.fetch(proxy: proxy, host: host, port: UInt16(url.port ?? 80),
                                    requestBody: rawBuf.baseAddress!, requestLen: httpReq.count)
                 }
+                var result = rawResult
                 defer { socks5_free_result(&result) }
                 guard !self.isCancelled else { return }
                 try self.deliver(result: &result, url: url)
