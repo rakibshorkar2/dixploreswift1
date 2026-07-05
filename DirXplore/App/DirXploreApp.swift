@@ -12,6 +12,7 @@ struct DirXploreApp: App {
                 .preferredColorScheme(settingsVM.isDarkMode ? .dark : .light)
                 .onAppear {
                     registerBackgroundTasks()
+                    StorageService.shared.ensureDownloadsDirectory()
                 }
         }
     }

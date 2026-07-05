@@ -2,7 +2,25 @@ import Foundation
 import Network
 
 final class GuardFlag: @unchecked Sendable {
-    var value = false
+    private let lock = NSLock()
+    private var _value = false
+
+    var value: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return _value
+    }
+
+    func claim() -> Bool {
+        lock.lock()
+        if _value {
+            lock.unlock()
+            return false
+        }
+        _value = true
+        lock.unlock()
+        return true
+    }
 }
 
 class ProxyService: ObservableObject {
@@ -19,15 +37,13 @@ class ProxyService: ObservableObject {
         return await withCheckedContinuation { continuation in
             let flag = GuardFlag()
             let timeoutTask = DispatchWorkItem {
-                guard !flag.value else { return }
-                flag.value = true
+                guard flag.claim() else { return }
                 connection.cancel()
                 continuation.resume(returning: nil)
             }
 
             connection.stateUpdateHandler = { state in
-                guard !flag.value else { return }
-                flag.value = true
+                guard flag.claim() else { return }
                 timeoutTask.cancel()
                 connection.cancel()
                 if case .ready = state {
@@ -43,7 +59,7 @@ class ProxyService: ObservableObject {
     }
 
     func socks5Connect(host: String, port: Int, username: String, password: String,
-                       targetHost: String, targetPort: Int) async -> Bool {
+                       targetHost: String, targetPort: Int, timeout: TimeInterval = 10) async -> Bool {
         let connection = NWConnection(
             host: NWEndpoint.Host(host),
             port: NWEndpoint.Port(rawValue: UInt16(port)) ?? 1080,
@@ -53,12 +69,17 @@ class ProxyService: ObservableObject {
         return await withCheckedContinuation { continuation in
             let flag = GuardFlag()
 
-            connection.stateUpdateHandler = { state in
-                guard !flag.value else { return }
-                flag.value = true
+            let timeoutTask = DispatchWorkItem {
+                guard flag.claim() else { return }
+                connection.cancel()
+                continuation.resume(returning: false)
+            }
 
+            connection.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
+                    guard flag.claim() else { return }
+                    timeoutTask.cancel()
                     self.performSOCKS5Handshake(connection: connection,
                                                   username: username,
                                                   password: password,
@@ -68,14 +89,19 @@ class ProxyService: ObservableObject {
                         continuation.resume(returning: success)
                     }
                 case .failed, .cancelled:
+                    guard flag.claim() else { return }
+                    timeoutTask.cancel()
                     connection.cancel()
                     continuation.resume(returning: false)
+                case .preparing:
+                    break
                 default:
                     break
                 }
             }
 
             connection.start(queue: .global())
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: timeoutTask)
         }
     }
 

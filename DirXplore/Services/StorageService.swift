@@ -24,6 +24,12 @@ class StorageService {
     }
 
     var freeDiskSpace: Int64 {
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+        if #available(iOS 16.0, *) {
+            if let capacity = try? url.resourceValues(forKeys: Set([.volumeAvailableCapacityForImportantUsageKey])).volumeAvailableCapacityForImportantUsage {
+                return capacity
+            }
+        }
         let path = appDocumentsDirectory.path
         guard let attrs = try? fileManager.attributesOfFileSystem(forPath: path) else { return 0 }
         return attrs[.systemFreeSize] as? Int64 ?? 0
@@ -38,11 +44,10 @@ class StorageService {
         try? fileManager.removeItem(at: destURL)
         do {
             try fileManager.copyItem(at: sourceURL, to: destURL)
-            return destURL
         } catch {
             try? fileManager.moveItem(at: sourceURL, to: destURL)
-            return destURL
         }
+        return destURL
     }
 
     func deleteFile(at url: URL) -> Bool {
@@ -65,5 +70,9 @@ class StorageService {
             includingPropertiesForKeys: [.fileSizeKey, .creationDateKey]
         ) else { return [] }
         return urls
+    }
+
+    func ensureDownloadsDirectory() {
+        _ = downloadsDirectory
     }
 }

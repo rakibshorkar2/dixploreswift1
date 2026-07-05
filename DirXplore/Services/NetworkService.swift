@@ -2,14 +2,33 @@ import Foundation
 
 class NetworkService: ObservableObject {
     static let shared = NetworkService()
-    private let session: URLSession
-    private var proxyConfig: ProxyConfig?
+    private var session: URLSession
+    private var proxyConfig: ProxyConfig? {
+        didSet { rebuildSession() }
+    }
 
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
-        self.session = URLSession(configuration: config)
+        session = URLSession(configuration: config)
+    }
+
+    private func rebuildSession() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 60
+
+        if let proxy = proxyConfig, proxy.isEnabled {
+            config.connectionProxyDictionary = [
+                "SOCKSEnable": NSNumber(value: true),
+                "SOCKSProxy": proxy.host,
+                "SOCKSPort": NSNumber(value: proxy.port)
+            ]
+        }
+
+        session.invalidateAndCancel()
+        session = URLSession(configuration: config)
     }
 
     func setProxy(_ config: ProxyConfig?) {
