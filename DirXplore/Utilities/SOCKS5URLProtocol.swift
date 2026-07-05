@@ -154,8 +154,8 @@ class SOCKS5URLProtocol: URLProtocol {
         guard let url = request.url else { fail(with: SOCKS5Error.invalidRequest); return }
 
         let method = request.httpMethod ?? "GET"
-        var path = url.path.isEmpty ? "/" : url.path
-        if let query = url.query { path += "?\(query)" }
+        var path = url.percentEncodedPath.isEmpty ? "/" : url.percentEncodedPath
+        if let eq = url.percentEncodedQuery { path += "?\(eq)" }
 
         var raw = "\(method) \(path) HTTP/1.1\r\n"
         raw += "Host: \(url.host ?? "")"
