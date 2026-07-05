@@ -35,30 +35,41 @@ class NetworkService: ObservableObject {
     }
 
     func fetchDirectoryListing(url: URL) async throws -> [DirectoryEntry] {
-        let request = URLRequest(url: url, timeoutInterval: 30)
-        let (data, response) = try await session.data(for: request)
+        var currentURL = url
+        for _ in 0..<5 {
+            let request = URLRequest(url: currentURL, timeoutInterval: 30)
+            let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkError.invalidResponse
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NetworkError.invalidResponse
+            }
+
+            if (300...399).contains(httpResponse.statusCode),
+               let location = httpResponse.allHeaderFields["Location"] as? String,
+               let redirectURL = URL(string: location, relativeTo: currentURL) {
+                currentURL = redirectURL
+                continue
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                throw NetworkError.httpError(httpResponse.statusCode)
+            }
+
+            guard let html = String(data: data, encoding: .utf8) else {
+                throw NetworkError.invalidData
+            }
+
+            let contentType = httpResponse.allHeaderFields["Content-Type"] as? String ?? ""
+
+            if contentType.contains("text/html") || html.contains("<html") || html.contains("<HTML") {
+                return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: currentURL)
+            } else if contentType.contains("text/plain") || contentType.contains("application/octet-stream") {
+                return DirectoryParser.shared.parseFTPStyleListing(text: html, baseURL: currentURL)
+            }
+
+            return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: currentURL)
         }
-
-        guard httpResponse.statusCode == 200 else {
-            throw NetworkError.httpError(httpResponse.statusCode)
-        }
-
-        guard let html = String(data: data, encoding: .utf8) else {
-            throw NetworkError.invalidData
-        }
-
-        let contentType = httpResponse.allHeaderFields["Content-Type"] as? String ?? ""
-
-        if contentType.contains("text/html") || html.contains("<html") || html.contains("<HTML") {
-            return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: url)
-        } else if contentType.contains("text/plain") || contentType.contains("application/octet-stream") {
-            return DirectoryParser.shared.parseFTPStyleListing(text: html, baseURL: url)
-        }
-
-        return DirectoryParser.shared.parseApacheDirectoryListing(html: html, baseURL: url)
+        throw NetworkError.invalidResponse
     }
 
     func downloadFile(url: URL, progressHandler: @escaping (Double) -> Void) async throws -> URL {

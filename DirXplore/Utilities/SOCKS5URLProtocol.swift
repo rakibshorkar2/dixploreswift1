@@ -161,7 +161,7 @@ class SOCKS5URLProtocol: URLProtocol {
         raw += "Host: \(url.host ?? "")"
         if let port = url.port, port != 80 { raw += ":\(port)" }
         raw += "\r\n"
-        raw += "Connection: close\r\n"
+        raw += "Connection: keep-alive\r\n"
 
         for (key, value) in request.allHTTPHeaderFields ?? [:] {
             let lower = key.lowercased()
@@ -196,6 +196,23 @@ class SOCKS5URLProtocol: URLProtocol {
 
             if !responseDelivered {
                 if let (code, headers, bodyStart) = parseHTTPHeader(from: buffer) {
+                    if (300...399).contains(code),
+                       let location = headers["Location"],
+                       let currentURL = request.url,
+                       let redirectURL = URL(string: location, relativeTo: currentURL),
+                       redirectURL.host == currentURL.host,
+                       redirectURL.port == currentURL.port,
+                       redirectURL.scheme == currentURL.scheme {
+                        responseDelivered = false
+                        contentLength = -1
+                        bodyLength = 0
+                        buffer = Data()
+                        var newReq = URLRequest(url: redirectURL)
+                        newReq.httpMethod = request.httpMethod
+                        newReq.allHTTPHeaderFields = request.allHTTPHeaderFields
+                        sendHTTPRequest(connection: connection, request: newReq)
+                        return
+                    }
                     responseDelivered = true
                     let httpVersion = "HTTP/1.1"
                     if let response = HTTPURLResponse(
