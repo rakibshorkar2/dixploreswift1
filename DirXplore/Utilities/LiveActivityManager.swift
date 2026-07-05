@@ -29,7 +29,8 @@ class LiveActivityManager {
         Task {
             guard let activity = activities[id] else { return }
             let state = DownloadProgressAttributes.ContentState(progress: progress, status: "downloading")
-            await activity.update(using: state)
+            let content = ActivityContent(state: state, staleDate: nil)
+            await activity.update(content)
         }
     }
 
@@ -40,7 +41,8 @@ class LiveActivityManager {
                 progress: completed ? 1.0 : 0,
                 status: completed ? "completed" : "failed"
             )
-            await activity.end(using: state, dismissalPolicy: .default)
+            let endContent = ActivityContent(state: state, staleDate: nil)
+            await activity.end(endContent, dismissalPolicy: .default)
             activities.removeValue(forKey: id)
         }
     }

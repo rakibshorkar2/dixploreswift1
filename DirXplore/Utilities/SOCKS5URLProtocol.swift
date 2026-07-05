@@ -51,8 +51,10 @@ class SOCKS5URLProtocol: URLProtocol {
                 performHandshake(connection: connection, username: proxy.username,
                                  password: proxy.password, targetHost: host,
                                  targetPort: port, request: mutableRequest as URLRequest)
-            case .failed(let error), .cancelled(let error):
+            case .failed(let error):
                 fail(with: error)
+            case .cancelled:
+                fail(with: SOCKS5Error.connectFailed)
             default:
                 break
             }

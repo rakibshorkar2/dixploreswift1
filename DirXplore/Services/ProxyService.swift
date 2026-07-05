@@ -54,7 +54,7 @@ class ProxyService: ObservableObject {
                     timeoutTask.cancel()
                     connection.cancel()
                     continuation.resume(returning: nil)
-                case .preparing, .waiting:
+                case .setup, .preparing, .waiting:
                     break
                 @unknown default:
                     break

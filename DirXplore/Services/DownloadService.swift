@@ -128,7 +128,8 @@ class DownloadService: NSObject, ObservableObject {
         guard let activity = liveActivities[id] else { return }
         let state = DownloadProgressAttributes.ContentState(progress: progress, status: "downloading")
         Task {
-            await activity.update(using: state)
+            let content = ActivityContent(state: state, staleDate: nil)
+            await activity.update(content)
         }
     }
 
@@ -136,7 +137,8 @@ class DownloadService: NSObject, ObservableObject {
         guard let activity = liveActivities[id] else { return }
         let state = DownloadProgressAttributes.ContentState(progress: 1.0, status: "completed")
         Task {
-            await activity.end(using: state, dismissalPolicy: .default)
+            let content = ActivityContent(state: state, staleDate: nil)
+            await activity.end(content, dismissalPolicy: .default)
         }
         liveActivities.removeValue(forKey: id)
     }
