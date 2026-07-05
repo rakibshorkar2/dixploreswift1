@@ -52,6 +52,8 @@ class DownloadService: NSObject, ObservableObject {
     func pauseDownload(id: UUID) {
         guard activeDownloads[id] != nil else { return }
         activeDownloads[id]?.status = .paused
+        progressObservers[id]?.invalidate()
+        progressObservers.removeValue(forKey: id)
         let pausedID = id
         downloadTasks[id]?.cancel(byProducingResumeData: { resumeData in
             Task { @MainActor in
@@ -135,12 +137,12 @@ class DownloadService: NSObject, ObservableObject {
 
     private func endLiveActivity(for id: UUID) {
         guard let activity = liveActivities[id] else { return }
+        liveActivities.removeValue(forKey: id)
         let state = DownloadProgressAttributes.ContentState(progress: 1.0, status: "completed")
         Task {
             let content = ActivityContent(state: state, staleDate: nil)
             await activity.end(content, dismissalPolicy: .default)
         }
-        liveActivities.removeValue(forKey: id)
     }
 
     func handleBackgroundDownload(task: BGProcessingTask) {

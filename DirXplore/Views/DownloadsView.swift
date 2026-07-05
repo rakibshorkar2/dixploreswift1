@@ -2,8 +2,6 @@ import SwiftUI
 
 struct DownloadsView: View {
     @StateObject private var viewModel = DownloadsViewModel()
-    @State private var selectedIds = Set<UUID>()
-    @State private var isEditing = false
 
     var body: some View {
         NavigationView {

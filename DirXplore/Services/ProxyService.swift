@@ -101,7 +101,7 @@ class ProxyService: ObservableObject {
                     timeoutTask.cancel()
                     connection.cancel()
                     continuation.resume(returning: false)
-                case .preparing:
+                case .setup, .preparing:
                     break
                 default:
                     break
@@ -168,12 +168,18 @@ class ProxyService: ObservableObject {
     }
 
     private func sendConnectRequest(connection: NWConnection, targetHost: String,
-                                     targetPort: Int,
-                                     completion: @escaping (Bool) -> Void) {
-        var request = Data([0x05, 0x01, 0x00, 0x03])
-        let hostData = Data(targetHost.utf8)
-        request.append(UInt8(hostData.count))
-        request.append(hostData)
+                                      targetPort: Int,
+                                      completion: @escaping (Bool) -> Void) {
+        var request = Data([0x05, 0x01, 0x00])
+        if let ipv4 = parseIPv4(targetHost) {
+            request.append(0x01)
+            request.append(contentsOf: ipv4)
+        } else {
+            request.append(0x03)
+            let hostData = Data(targetHost.utf8)
+            request.append(UInt8(hostData.count))
+            request.append(hostData)
+        }
         var portBE = UInt16(targetPort).bigEndian
         withUnsafeBytes(of: &portBE) { request.append(contentsOf: $0) }
 
@@ -185,5 +191,16 @@ class ProxyService: ObservableObject {
                 completion(true)
             }
         })
+    }
+
+    private func parseIPv4(_ host: String) -> Data? {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var bytes = Data()
+        for p in parts {
+            guard let v = UInt8(p) else { return nil }
+            bytes.append(v)
+        }
+        return bytes
     }
 }

@@ -13,6 +13,7 @@ class BrowserViewModel: ObservableObject {
     @Published var navigationHistory: [URL] = []
     @Published var canGoBack = false
     @Published var canGoForward = false
+    private var forwardStack: [URL] = []
 
     private let networkService = NetworkService.shared
     private let defaults = UserDefaults.standard
@@ -35,7 +36,22 @@ class BrowserViewModel: ObservableObject {
         let encodedURL = encodeURLIfNeeded(url)
         navigationHistory.append(encodedURL)
         canGoBack = navigationHistory.count > 1
+        forwardStack.removeAll()
+        canGoForward = false
         fetchDirectory(url: encodedURL)
+    }
+
+    func openEntry(_ entry: DirectoryEntry) {
+        if entry.isDirectory {
+            guard let url = URL(string: entry.url.absoluteString) else { return }
+            navigationHistory.append(url)
+            canGoBack = navigationHistory.count > 1
+            forwardStack.removeAll()
+            canGoForward = false
+            fetchDirectory(url: url)
+        } else {
+            DownloadService.shared.startDownload(url: entry.url)
+        }
     }
 
     private func encodeURLIfNeeded(_ url: URL) -> URL {
@@ -75,7 +91,8 @@ class BrowserViewModel: ObservableObject {
 
     func goBack() {
         guard navigationHistory.count >= 2 else { return }
-        navigationHistory.removeLast()
+        let current = navigationHistory.removeLast()
+        forwardStack.append(current)
         canGoForward = true
         if let url = navigationHistory.last {
             fetchDirectory(url: url)
@@ -84,17 +101,12 @@ class BrowserViewModel: ObservableObject {
     }
 
     func goForward() {
-        // Simplified - would need separate forward stack
-        refresh()
-    }
-
-    func openEntry(_ entry: DirectoryEntry) {
-        if entry.isDirectory {
-            fetchDirectory(url: entry.url)
-        } else {
-            // Download the file
-            DownloadService.shared.startDownload(url: entry.url)
-        }
+        guard !forwardStack.isEmpty else { return }
+        let url = forwardStack.removeLast()
+        navigationHistory.append(url)
+        canGoBack = navigationHistory.count > 1
+        canGoForward = !forwardStack.isEmpty
+        fetchDirectory(url: url)
     }
 
     // MARK: - Bookmarks

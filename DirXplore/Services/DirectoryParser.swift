@@ -29,7 +29,15 @@ class DirectoryParser {
 
             guard !name.isEmpty && name != "Parent Directory" else { continue }
 
-            let entryURL = URL(string: href, relativeTo: baseURL) ?? baseURL.appendingPathComponent(href)
+            let entryURL: URL
+            if let resolved = URL(string: href, relativeTo: baseURL) {
+                entryURL = resolved
+            } else if let encoded = href.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                      let resolved = URL(string: encoded, relativeTo: baseURL) {
+                entryURL = resolved
+            } else {
+                entryURL = baseURL.appendingPathComponent(href)
+            }
 
             entries.append(DirectoryEntry(
                 name: name,

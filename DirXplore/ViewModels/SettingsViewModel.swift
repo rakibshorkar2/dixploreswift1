@@ -54,7 +54,6 @@ class SettingsViewModel: ObservableObject {
 
     func toggleDarkMode() {
         isDarkMode.toggle()
-        updateStorageInfo()
     }
 
     func loadSettings() {

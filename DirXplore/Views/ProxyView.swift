@@ -66,7 +66,6 @@ struct ProxyView: View {
             Button("Save Configuration") {
                 viewModel.saveConfig()
             }
-            .disabled(!viewModel.isEnabled)
         }
     }
 

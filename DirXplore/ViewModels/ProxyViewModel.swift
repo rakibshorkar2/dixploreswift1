@@ -28,6 +28,9 @@ class ProxyViewModel: ObservableObject {
 
     init() {
         loadConfig()
+        if isEnabled {
+            NetworkService.shared.setProxy(proxyConfig)
+        }
     }
 
     func testPing() {

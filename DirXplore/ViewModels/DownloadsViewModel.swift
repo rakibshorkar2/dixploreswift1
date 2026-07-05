@@ -8,7 +8,7 @@ class DownloadsViewModel: ObservableObject {
     @Published var completedDownloadCount: Int = 0
 
     private let downloadService = DownloadService.shared
-    private var cancellables: [NSObjectProtocol] = []
+    private var observerTasks: [Task<Void, Never>] = []
 
     var activeDownloads: [DownloadTaskItem] {
         downloadItems.filter { $0.status == .downloading || $0.status == .pending }
@@ -27,17 +27,21 @@ class DownloadsViewModel: ObservableObject {
         setupObservers()
     }
 
+    deinit {
+        for task in observerTasks { task.cancel() }
+    }
+
     private func setupObservers() {
-        Task { @MainActor in
+        observerTasks.append(Task { @MainActor in
             for await _ in downloadService.$activeDownloads.values {
                 self.refreshState()
             }
-        }
-        Task { @MainActor in
+        })
+        observerTasks.append(Task { @MainActor in
             for await _ in downloadService.$completedDownloads.values {
                 self.refreshState()
             }
-        }
+        })
     }
 
     func startDownload(url: URL) {
