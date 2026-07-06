@@ -162,7 +162,6 @@ class DownloadManager: NSObject {
             taskIdMap[task.taskIdentifier] = downloadId
             resumeDataMap.removeValue(forKey: downloadId)
             task.resume()
-            startLiveActivity(downloadId: downloadId, fileName: fileName)
             sendEvent(type: "resumed", downloadId: downloadId, data: ["fileName": fileName])
         } else {
             var request = URLRequest(url: downloadUrl)
@@ -174,7 +173,6 @@ class DownloadManager: NSObject {
             taskIdMap[task.taskIdentifier] = downloadId
             progressMap[downloadId] = (0, 0)
             task.resume()
-            startLiveActivity(downloadId: downloadId, fileName: fileName)
             sendEvent(type: "started", downloadId: downloadId, data: ["fileName": fileName, "url": url])
         }
     }
@@ -207,7 +205,6 @@ class DownloadManager: NSObject {
         progressMap.removeValue(forKey: downloadId)
         retryCountMap.removeValue(forKey: downloadId)
         fileNameMap.removeValue(forKey: downloadId)
-        endLiveActivity(downloadId: downloadId, status: "Cancelled")
         sendEvent(type: "cancelled", downloadId: downloadId, data: [:])
     }
 
@@ -219,7 +216,6 @@ class DownloadManager: NSObject {
             progressMap.removeValue(forKey: id)
             retryCountMap.removeValue(forKey: id)
             fileNameMap.removeValue(forKey: id)
-            endLiveActivity(downloadId: id, status: "Cancelled")
         }
         activeTasks.removeAll()
     }
@@ -273,42 +269,59 @@ class DownloadManager: NSObject {
         ])
     }
 
-    // MARK: - Live Activities
+    // MARK: - Live Activity Manager (single Live Activity)
 
-    private var liveActivities: [String: Activity<DownloadActivityAttributes>] = [:]
+    private var liveActivity: Activity<DownloadActivityAttributes>?
+    private var activeDownloadCount: Int = 0
 
-    func startLiveActivity(downloadId: String, fileName: String) {
+    func downloadStateChanged(activeCount: Int, primaryInfo: [String: Any]?) {
         guard #available(iOS 16.2, *), liveActivityEnabled else { return }
-        fileNameMap[downloadId] = fileName
-        let attributes = DownloadActivityAttributes(downloadId: downloadId)
+        let previousCount = activeDownloadCount
+        activeDownloadCount = activeCount
+
+        if activeCount > 0 {
+            if previousCount == 0 {
+                startSingleLiveActivity(info: primaryInfo)
+            } else {
+                updateSingleLiveActivity(info: primaryInfo)
+            }
+        } else if previousCount > 0 {
+            endSingleLiveActivity()
+        }
+    }
+
+    private func startSingleLiveActivity(info: [String: Any]?) {
+        let fileName = info?["fileName"] as? String ?? "Downloading..."
+        let progress = info?["progress"] as? Double ?? 0
+        let speed = info?["speed"] as? String ?? ""
+        let eta = info?["eta"] as? String ?? "--"
+        let attributes = DownloadActivityAttributes(downloadId: "active")
         let state = DownloadActivityAttributes.ContentState(
             fileName: fileName,
-            progress: 0,
-            speed: "Starting...",
-            eta: "--",
+            progress: progress,
+            speed: speed,
+            eta: eta,
             isCompleted: false
         )
         let content = ActivityContent(state: state, staleDate: nil)
         do {
-            let activity = try Activity.request(
+            liveActivity = try Activity.request(
                 attributes: attributes,
                 content: content,
                 pushType: nil
             )
-            liveActivities[downloadId] = activity
         } catch {
             debugPrint("Failed to start Live Activity: \(error)")
-            liveActivityErrorSink?(["event": "startError", "downloadId": downloadId, "error": error.localizedDescription])
+            liveActivityErrorSink?(["event": "startError", "error": error.localizedDescription])
         }
     }
 
-    func updateLiveActivity(downloadId: String, received: Int64, total: Int64) {
-        guard #available(iOS 16.2, *),
-              let activity = liveActivities[downloadId] else { return }
-        let fileName = fileNameMap[downloadId] ?? "Download"
-        let progress = total > 0 ? Double(received) / Double(total) : 0.0
-        let speed = formatSpeed(bytesPerSecond: 0)
-        let eta = progress > 0 ? formatEta(remainingBytes: Int64(Double(total) * (1 - progress)), speed: 0) : "--"
+    private func updateSingleLiveActivity(info: [String: Any]?) {
+        guard let activity = liveActivity else { return }
+        let fileName = info?["fileName"] as? String ?? "Downloading..."
+        let progress = info?["progress"] as? Double ?? 0
+        let speed = info?["speed"] as? String ?? ""
+        let eta = info?["eta"] as? String ?? "--"
         let state = DownloadActivityAttributes.ContentState(
             fileName: fileName,
             progress: progress,
@@ -318,63 +331,18 @@ class DownloadManager: NSObject {
         )
         Task {
             await activity.update(using: state)
-        }
-    }
-
-    func endLiveActivity(downloadId: String, status: String) {
-        guard #available(iOS 16.2, *),
-              let activity = liveActivities.removeValue(forKey: downloadId) else { return }
-        let fileName = fileNameMap[downloadId] ?? "Download"
-        let state = DownloadActivityAttributes.ContentState(
-            fileName: fileName,
-            progress: status == "Complete" ? 1.0 : 0.0,
-            speed: "",
-            eta: "",
-            isCompleted: true
-        )
-        Task {
-            await activity.end(using: state, dismissalPolicy: .after(Date.now.addingTimeInterval(4)))
         }
     }
 
     func endAllLiveActivities() {
         guard #available(iOS 16.2, *), liveActivityEnabled else { return }
-        for (_, activity) in liveActivities {
+        if let activity = liveActivity {
+            liveActivity = nil
+            activeDownloadCount = 0
             Task {
                 await activity.end(dismissalPolicy: .immediate)
             }
         }
-        liveActivities.removeAll()
-    }
-
-    func updateLiveActivityWithDetails(downloadId: String, fileName: String, progress: Double, speed: String, eta: String, isCompleted: Bool) {
-        guard #available(iOS 16.2, *),
-              let activity = liveActivities[downloadId] else { return }
-        let state = DownloadActivityAttributes.ContentState(
-            fileName: fileName,
-            progress: progress,
-            speed: speed,
-            eta: eta,
-            isCompleted: isCompleted
-        )
-        Task {
-            await activity.update(using: state)
-        }
-    }
-
-    private func formatSpeed(bytesPerSecond: Int64) -> String {
-        if bytesPerSecond < 1024 { return "\(bytesPerSecond) B/s" }
-        if bytesPerSecond < 1024 * 1024 { return String(format: "%.1f KB/s", Double(bytesPerSecond) / 1024) }
-        if bytesPerSecond < 1024 * 1024 * 1024 { return String(format: "%.1f MB/s", Double(bytesPerSecond) / (1024 * 1024)) }
-        return String(format: "%.1f GB/s", Double(bytesPerSecond) / (1024 * 1024 * 1024))
-    }
-
-    private func formatEta(remainingBytes: Int64, speed: Int64) -> String {
-        guard speed > 0 else { return "--" }
-        let seconds = Double(remainingBytes) / Double(speed)
-        if seconds < 60 { return "\(Int(seconds))s" }
-        if seconds < 3600 { return "\(Int(seconds / 60))m \(Int(seconds.truncatingRemainder(dividingBy: 60)))s" }
-        return "\(Int(seconds / 3600))h \(Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60))m"
     }
 }
 
@@ -383,7 +351,6 @@ extension DownloadManager: URLSessionDownloadDelegate {
         guard let downloadId = taskIdMap[downloadTask.taskIdentifier] else { return }
         progressMap[downloadId] = (totalBytesWritten, totalBytesExpectedToWrite)
         sendProgress(downloadId: downloadId, received: totalBytesWritten, total: totalBytesExpectedToWrite)
-        updateLiveActivity(downloadId: downloadId, received: totalBytesWritten, total: totalBytesExpectedToWrite)
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -412,10 +379,8 @@ extension DownloadManager: URLSessionDownloadDelegate {
                 "fileName": fileName,
                 "savePath": destinationUrl.path
             ])
-            endLiveActivity(downloadId: downloadId, status: "Complete")
         } catch {
             sendEvent(type: "error", downloadId: downloadId, data: ["message": "Failed to move file: \(error.localizedDescription)"])
-            endLiveActivity(downloadId: downloadId, status: "Failed")
         }
 
         activeTasks.removeValue(forKey: downloadId)
@@ -432,17 +397,14 @@ extension DownloadManager: URLSessionDownloadDelegate {
             if error.code == NSURLErrorCancelled {
                 if resumeDataMap[downloadId] == nil {
                     sendEvent(type: "cancelled", downloadId: downloadId, data: [:])
-                    endLiveActivity(downloadId: downloadId, status: "Cancelled")
                 }
             } else if error.domain == NSURLErrorDomain && error.userInfo[NSURLSessionDownloadTaskResumeData] != nil {
                 let resumeData = error.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
                 if let data = resumeData {
                     resumeDataMap[downloadId] = data
                     sendEvent(type: "paused", downloadId: downloadId, data: ["resumable": true])
-                    endLiveActivity(downloadId: downloadId, status: "Paused")
                 } else {
                     sendEvent(type: "error", downloadId: downloadId, data: ["message": error.localizedDescription])
-                    endLiveActivity(downloadId: downloadId, status: "Failed")
                 }
             } else {
                 let attempt = retryCountMap[downloadId] ?? 0
@@ -471,7 +433,6 @@ extension DownloadManager: URLSessionDownloadDelegate {
                     }
                 } else {
                     sendEvent(type: "error", downloadId: downloadId, data: ["message": error.localizedDescription])
-                    endLiveActivity(downloadId: downloadId, status: "Failed")
                     retryCountMap.removeValue(forKey: downloadId)
                 }
             }

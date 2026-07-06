@@ -153,67 +153,11 @@ class DownloadPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         case "isEnabled":
             result(DownloadManager.shared.liveActivityEnabled)
 
-        case "start":
+        case "updateActiveDownloads":
             if let args = call.arguments as? [String: Any],
-               let downloadId = args["downloadId"] as? String,
-               let fileName = args["fileName"] as? String {
-                DownloadManager.shared.startLiveActivity(downloadId: downloadId, fileName: fileName)
-            }
-            result(nil)
-
-        case "update":
-            if let args = call.arguments as? [String: Any],
-               let downloadId = args["downloadId"] as? String,
-               let received = args["received"] as? Int64,
-               let total = args["total"] as? Int64 {
-                DownloadManager.shared.updateLiveActivity(downloadId: downloadId, received: received, total: total)
-            }
-            result(nil)
-
-        case "end":
-            if let args = call.arguments as? [String: Any],
-               let downloadId = args["downloadId"] as? String,
-               let status = args["status"] as? String {
-                DownloadManager.shared.endLiveActivity(downloadId: downloadId, status: status)
-            }
-            result(nil)
-
-        // New Live Activity API (spec-compliant)
-        case "startLiveActivity":
-            if let args = call.arguments as? [String: Any],
-               let downloadId = args["downloadId"] as? String,
-               let fileName = args["fileName"] as? String,
-               let progress = args["progress"] as? Double,
-               let speed = args["speed"] as? String,
-               let eta = args["eta"] as? String {
-                DownloadManager.shared.startLiveActivity(downloadId: downloadId, fileName: fileName)
-            }
-            result(nil)
-
-        case "updateLiveActivity":
-            if let args = call.arguments as? [String: Any],
-               let downloadId = args["downloadId"] as? String,
-               let progress = args["progress"] as? Double,
-               let speed = args["speed"] as? String,
-               let eta = args["eta"] as? String {
-                let fileName = args["fileName"] as? String ?? ""
-                DownloadManager.shared.updateLiveActivityWithDetails(
-                    downloadId: downloadId,
-                    fileName: fileName,
-                    progress: progress,
-                    speed: speed,
-                    eta: eta,
-                    isCompleted: false
-                )
-            }
-            result(nil)
-
-        case "endLiveActivity":
-            if let args = call.arguments as? [String: Any],
-               let downloadId = args["downloadId"] as? String {
-                DownloadManager.shared.endLiveActivity(downloadId: downloadId, status: "Complete")
-            } else {
-                DownloadManager.shared.endAllLiveActivities()
+               let count = args["count"] as? Int {
+                let primary = args["primary"] as? [String: Any]
+                DownloadManager.shared.downloadStateChanged(activeCount: count, primaryInfo: primary)
             }
             result(nil)
 

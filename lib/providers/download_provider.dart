@@ -175,6 +175,7 @@ class DownloadProvider with ChangeNotifier {
         notifyListeners();
         break;
     }
+    _syncLiveActivityState();
   }
 
   @override
@@ -353,6 +354,7 @@ class DownloadProvider with ChangeNotifier {
       updateStorageInfo();
       notifyListeners();
     }
+    _syncLiveActivityState();
   }
 
   void _stopForegroundIfNoActive() {
@@ -370,6 +372,7 @@ class DownloadProvider with ChangeNotifier {
     _saveQueue();
     notifyListeners();
     _processQueue();
+    _syncLiveActivityState();
   }
 
   void stop(String id) {
@@ -386,6 +389,7 @@ class DownloadProvider with ChangeNotifier {
     _saveQueue();
     updateStorageInfo();
     notifyListeners();
+    _syncLiveActivityState();
   }
 
   void resumeBatch(String batchId) {
@@ -404,6 +408,7 @@ class DownloadProvider with ChangeNotifier {
       _saveQueue();
       notifyListeners();
       _processQueue();
+      _syncLiveActivityState();
     }
   }
 
@@ -427,6 +432,7 @@ class DownloadProvider with ChangeNotifier {
     if (hasPaused) {
       _saveQueue();
       notifyListeners();
+      _syncLiveActivityState();
     }
   }
 
@@ -443,6 +449,7 @@ class DownloadProvider with ChangeNotifier {
     _saveQueue();
     updateStorageInfo();
     notifyListeners();
+    _syncLiveActivityState();
   }
 
   void clearDone() {
@@ -451,6 +458,7 @@ class DownloadProvider with ChangeNotifier {
     _saveQueue();
     updateStorageInfo();
     notifyListeners();
+    _syncLiveActivityState();
   }
 
   void clearAll() {
@@ -465,6 +473,7 @@ class DownloadProvider with ChangeNotifier {
     _saveQueue();
     updateStorageInfo();
     notifyListeners();
+    _syncLiveActivityState();
   }
 
   // --- Selection Features ---
@@ -556,6 +565,7 @@ class DownloadProvider with ChangeNotifier {
     _stopForegroundIfNoActive();
     _saveQueue();
     notifyListeners();
+    _syncLiveActivityState();
   }
 
   void resumeAll() {
@@ -615,6 +625,7 @@ class DownloadProvider with ChangeNotifier {
       }
     } finally {
       _isProcessingQueue = false;
+      _syncLiveActivityState();
     }
   }
 
@@ -623,7 +634,6 @@ class DownloadProvider with ChangeNotifier {
     item.status = DownloadStatus.downloading;
     notifyListeners();
     await DatabaseHelper().updateDownload(item);
-    _liveActivityStart(item.id, item.fileName);
     _showiOSNotification("Download Started", item.fileName);
 
     // Start Foreground Service (Android only)
@@ -675,8 +685,6 @@ class DownloadProvider with ChangeNotifier {
         item.totalBytes = total;
         _cancelTokens.remove(item.id);
         await updateStorageInfo();
-      _liveActivityEnd(item.id, "Complete");
-      _showiOSNotification("Download Complete", item.fileName);
         _showiOSNotification("Download Complete", item.fileName);
 
         if (!_isIOS) {
@@ -706,7 +714,6 @@ class DownloadProvider with ChangeNotifier {
       item.downloadedBytes = item.totalBytes;
       _cancelTokens.remove(item.id);
       await updateStorageInfo();
-      _liveActivityEnd(item.id, "Complete");
 
       if (!_isIOS) {
         _channel.invokeMethod('stopForegroundService', {
@@ -808,14 +815,7 @@ class DownloadProvider with ChangeNotifier {
       'size':
           '${_formatSize(item.downloadedBytes)} / ${_formatSize(item.totalBytes)}',
     }).catchError((e) { debugPrint('Channel method error: $e'); });
-    _liveActivityUpdate(item.id, item.downloadedBytes, item.totalBytes);
-    updateLiveActivity(
-      progress: item.totalBytes > 0 ? item.downloadedBytes / item.totalBytes : 0.0,
-      speed: '${(item.speedBytesPerSec / 1024 / 1024).toStringAsFixed(2)} MB/s',
-      eta: _formatDuration(item.etaSeconds),
-      downloadId: item.id,
-      fileName: item.fileName,
-    );
+    _syncLiveActivityState();
 
     final now = DateTime.now();
     if (now.difference(_lastNotifyTime).inMilliseconds > 250) {
@@ -831,7 +831,6 @@ class DownloadProvider with ChangeNotifier {
 
   void _handleDownloadError(DownloadItem item, dynamic e) {
     if (e is DioException && CancelToken.isCancel(e)) {
-      _liveActivityEnd(item.id, "Cancelled");
       return;
     }
 
@@ -841,7 +840,6 @@ class DownloadProvider with ChangeNotifier {
     } else {
       item.status = DownloadStatus.error;
       item.errorMessage = e.toString();
-      _liveActivityEnd(item.id, "Failed");
       _showiOSNotification("Download Failed", item.fileName);
     }
     DatabaseHelper().updateDownload(item);
@@ -890,79 +888,26 @@ class DownloadProvider with ChangeNotifier {
     }
   }
 
-  void _liveActivityStart(String downloadId, String fileName) {
+  void _syncLiveActivityState() {
     if (!_isIOS) return;
-    _liveActivityChannel.invokeMethod('start', {
-      'downloadId': downloadId,
-      'fileName': fileName,
-    }).catchError((e) => debugPrint('Live Activity start error: $e'));
-    startLiveActivity(
-      title: fileName,
-      progress: 0.0,
-      speed: 'Starting...',
-      eta: '--',
-      downloadId: downloadId,
-    );
-  }
-
-  void _liveActivityUpdate(String downloadId, int received, int total) {
-    if (!_isIOS) return;
-    _liveActivityChannel.invokeMethod('update', {
-      'downloadId': downloadId,
-      'received': received,
-      'total': total,
-    }).catchError((e) => debugPrint('Live Activity update error: $e'));
-  }
-
-  void _liveActivityEnd(String downloadId, String status) {
-    if (!_isIOS) return;
-    _liveActivityChannel.invokeMethod('end', {
-      'downloadId': downloadId,
-      'status': status,
-    }).catchError((e) => debugPrint('Live Activity end error: $e'));
-  }
-
-  // --- New Live Activity API (spec-compliant) ---
-
-  void startLiveActivity({
-    required String title,
-    required double progress,
-    required String speed,
-    required String eta,
-    String? downloadId,
-  }) {
-    if (!_isIOS) return;
-    _liveActivityChannel.invokeMethod('startLiveActivity', {
-      'downloadId': downloadId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      'fileName': title,
-      'progress': progress,
-      'speed': speed,
-      'eta': eta,
-    }).catchError((e) => debugPrint('startLiveActivity error: $e'));
-  }
-
-  void updateLiveActivity({
-    required double progress,
-    required String speed,
-    required String eta,
-    String? downloadId,
-    String? fileName,
-  }) {
-    if (!_isIOS) return;
-    _liveActivityChannel.invokeMethod('updateLiveActivity', {
-      'downloadId': downloadId ?? '',
-      'fileName': fileName ?? '',
-      'progress': progress,
-      'speed': speed,
-      'eta': eta,
-    }).catchError((e) => debugPrint('updateLiveActivity error: $e'));
-  }
-
-  void endLiveActivity({String? downloadId}) {
-    if (!_isIOS) return;
-    _liveActivityChannel.invokeMethod('endLiveActivity', {
-      'downloadId': downloadId ?? '',
-    }).catchError((e) => debugPrint('endLiveActivity error: $e'));
+    final active = _queue.where((d) => d.status == DownloadStatus.downloading).toList();
+    if (active.isEmpty) {
+      _liveActivityChannel.invokeMethod('updateActiveDownloads', {
+        'count': 0,
+        'primary': null,
+      }).catchError((e) => debugPrint('updateActiveDownloads error: $e'));
+    } else {
+      final primary = active.first;
+      _liveActivityChannel.invokeMethod('updateActiveDownloads', {
+        'count': active.length,
+        'primary': {
+          'fileName': primary.fileName,
+          'progress': primary.progress,
+          'speed': '${(primary.speedBytesPerSec / 1024 / 1024).toStringAsFixed(2)} MB/s',
+          'eta': _formatDuration(primary.etaSeconds),
+        },
+      }).catchError((e) => debugPrint('updateActiveDownloads error: $e'));
+    }
   }
 
   void _showiOSNotification(String title, String body) {
