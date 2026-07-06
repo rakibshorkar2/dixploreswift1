@@ -922,6 +922,9 @@ class DownloadProvider with ChangeNotifier {
           'progress': primary.progress,
           'speed': '${(primary.speedBytesPerSec / 1024 / 1024).toStringAsFixed(2)} MB/s',
           'eta': _formatDuration(primary.etaSeconds),
+          'downloadedSize': _formatSize(primary.downloadedBytes),
+          'totalSize': _formatSize(primary.totalBytes),
+          'status': primary.statusLabel,
         },
       }).catchError((e) => debugPrint('updateActiveDownloads error: $e'));
     }

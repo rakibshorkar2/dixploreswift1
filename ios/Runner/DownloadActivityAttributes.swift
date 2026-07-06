@@ -7,6 +7,9 @@ struct DownloadActivityAttributes: ActivityAttributes {
         var progress: Double
         var speed: String
         var eta: String
+        var downloadedSize: String
+        var totalSize: String
+        var status: String
         var isCompleted: Bool
     }
 

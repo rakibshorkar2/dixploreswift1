@@ -9,6 +9,7 @@ import '../models/download_item.dart';
 import '../services/thumbnail_service.dart';
 import '../services/haptic_service.dart';
 import 'package:share_plus/share_plus.dart';
+import 'new_download_sheet.dart';
 
 class DownloadTab extends StatefulWidget {
   const DownloadTab({super.key});
@@ -65,6 +66,19 @@ class _DownloadTabState extends State<DownloadTab> {
                 ),
               ]
             : [
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: 'New Download',
+                  onPressed: () {
+                    HapticService.light();
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const NewDownloadSheet(),
+                    );
+                  },
+                ),
                 IconButton(
                   icon: const Icon(Icons.checklist),
                   tooltip: 'Select Items',

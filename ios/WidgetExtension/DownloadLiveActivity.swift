@@ -10,42 +10,45 @@ struct DownloadLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(context.state.fileName)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .foregroundColor(.white)
-                        if !context.state.isCompleted {
-                            Text(context.state.speed)
+                    HStack(spacing: 6) {
+                        Image(systemName: iconName(for: context.state.status, isCompleted: context.state.isCompleted))
+                            .foregroundColor(iconColor(for: context.state.status, isCompleted: context.state.isCompleted))
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(context.state.fileName)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                                .foregroundColor(.white)
+                            Text(context.state.status)
                                 .font(.caption2)
-                                .foregroundColor(.green)
+                                .foregroundColor(statusColor(context.state.status, isCompleted: context.state.isCompleted))
                         }
                     }
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 2) {
+                    VStack(alignment: .trailing, spacing: 1) {
                         Text(context.state.isCompleted ? "Done" : "\(Int(context.state.progress * 100))%")
-                            .font(.title2)
+                            .font(.title3)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                        if !context.state.isCompleted {
-                            Text(context.state.eta)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
+                        Text("\(context.state.downloadedSize) / \(context.state.totalSize)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 4) {
                         ProgressView(value: context.state.isCompleted ? 1.0 : context.state.progress)
                             .tint(context.state.isCompleted ? .green : .blue)
                         HStack {
-                            Text(context.state.speed)
+                            Label(context.state.speed, systemImage: "arrow.down.circle")
                                 .font(.caption2)
                                 .foregroundColor(.green)
                             Spacer()
-                            Text(context.state.eta)
+                            Label(context.state.eta, systemImage: "clock")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -67,6 +70,39 @@ struct DownloadLiveActivity: Widget {
             }
         }
     }
+
+    private func iconName(for status: String, isCompleted: Bool) -> String {
+        if isCompleted { return "checkmark.circle.fill" }
+        switch status.lowercased() {
+        case "downloading": return "arrow.down.circle.fill"
+        case "paused": return "pause.circle.fill"
+        case "error", "failed": return "exclamationmark.circle.fill"
+        case "queued": return "clock.fill"
+        default: return "arrow.down.circle"
+        }
+    }
+
+    private func iconColor(for status: String, isCompleted: Bool) -> Color {
+        if isCompleted { return .green }
+        switch status.lowercased() {
+        case "downloading": return .blue
+        case "paused": return .orange
+        case "error", "failed": return .red
+        case "queued": return .gray
+        default: return .blue
+        }
+    }
+
+    private func statusColor(_ status: String, isCompleted: Bool) -> Color {
+        if isCompleted { return .green }
+        switch status.lowercased() {
+        case "downloading": return .blue
+        case "paused": return .orange
+        case "error", "failed": return .red
+        case "queued": return .gray
+        default: return .secondary
+        }
+    }
 }
 
 @available(iOS 16.1, *)
@@ -76,9 +112,13 @@ private struct LockScreenView: View {
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(context.state.fileName)
-                    .font(.headline)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Image(systemName: iconName())
+                        .foregroundColor(iconColor())
+                    Text(context.state.fileName)
+                        .font(.headline)
+                        .lineLimit(1)
+                }
                 if context.state.isCompleted {
                     Label("Complete", systemImage: "checkmark.circle.fill")
                         .font(.caption)
@@ -90,16 +130,24 @@ private struct LockScreenView: View {
                         Text(context.state.speed)
                             .font(.caption)
                             .foregroundColor(.green)
+                        Text("\u{2022}")
+                            .foregroundColor(.secondary)
+                        Text(context.state.status)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(context.state.isCompleted
                     ? "Done"
                     : "\(Int(context.state.progress * 100))%")
                     .font(.title2)
                     .fontWeight(.bold)
+                Text("\(context.state.downloadedSize) / \(context.state.totalSize)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
                 if !context.state.isCompleted {
                     Text(context.state.eta)
                         .font(.caption2)
@@ -110,5 +158,27 @@ private struct LockScreenView: View {
         .padding()
         .activityBackgroundTint(.black.opacity(0.2))
         .activitySystemActionForegroundColor(.blue)
+    }
+
+    private func iconName() -> String {
+        if context.state.isCompleted { return "checkmark.circle.fill" }
+        switch context.state.status.lowercased() {
+        case "downloading": return "arrow.down.circle.fill"
+        case "paused": return "pause.circle.fill"
+        case "error", "failed": return "exclamationmark.circle.fill"
+        case "queued": return "clock.fill"
+        default: return "arrow.down.circle"
+        }
+    }
+
+    private func iconColor() -> Color {
+        if context.state.isCompleted { return .green }
+        switch context.state.status.lowercased() {
+        case "downloading": return .blue
+        case "paused": return .orange
+        case "error", "failed": return .red
+        case "queued": return .gray
+        default: return .blue
+        }
     }
 }

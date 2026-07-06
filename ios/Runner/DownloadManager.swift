@@ -296,13 +296,19 @@ class DownloadManager: NSObject {
         let progress = info?["progress"] as? Double ?? 0
         let speed = info?["speed"] as? String ?? ""
         let eta = info?["eta"] as? String ?? "--"
+        let downloadedSize = info?["downloadedSize"] as? String ?? "--"
+        let totalSize = info?["totalSize"] as? String ?? "--"
+        let status = info?["status"] as? String ?? "Queued"
         let attributes = DownloadActivityAttributes(downloadId: "active")
         let state = DownloadActivityAttributes.ContentState(
             fileName: fileName,
             progress: progress,
             speed: speed,
             eta: eta,
-            isCompleted: false
+            downloadedSize: downloadedSize,
+            totalSize: totalSize,
+            status: status,
+            isCompleted: status.lowercased() == "done"
         )
         let content = ActivityContent(state: state, staleDate: nil)
         do {
@@ -324,12 +330,18 @@ class DownloadManager: NSObject {
         let progress = info?["progress"] as? Double ?? 0
         let speed = info?["speed"] as? String ?? ""
         let eta = info?["eta"] as? String ?? "--"
+        let downloadedSize = info?["downloadedSize"] as? String ?? "--"
+        let totalSize = info?["totalSize"] as? String ?? "--"
+        let status = info?["status"] as? String ?? "Queued"
         let state = DownloadActivityAttributes.ContentState(
             fileName: fileName,
             progress: progress,
             speed: speed,
             eta: eta,
-            isCompleted: false
+            downloadedSize: downloadedSize,
+            totalSize: totalSize,
+            status: status,
+            isCompleted: status.lowercased() == "done"
         )
         Task {
             await activity.update(using: state)
