@@ -2,7 +2,7 @@ import Flutter
 import UIKit
 import UserNotifications
 
-class DownloadPlugin: NSObject, FlutterPlugin {
+class DownloadPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     static func register(with registrar: FlutterPluginRegistrar) {
         let messenger = registrar.messenger()
 
@@ -15,6 +15,9 @@ class DownloadPlugin: NSObject, FlutterPlugin {
 
         let liveActivityChannel = FlutterMethodChannel(name: "com.dirxplore/live_activity", binaryMessenger: messenger)
         registrar.addMethodCallDelegate(instance, channel: liveActivityChannel)
+
+        let liveActivityErrorChannel = FlutterEventChannel(name: "com.dirxplore/live_activity_errors", binaryMessenger: messenger)
+        liveActivityErrorChannel.setStreamHandler(instance)
 
         let proxyChannel = FlutterMethodChannel(name: "com.dirxplore/proxy_config", binaryMessenger: messenger)
         registrar.addMethodCallDelegate(instance, channel: proxyChannel)
@@ -175,6 +178,45 @@ class DownloadPlugin: NSObject, FlutterPlugin {
             }
             result(nil)
 
+        // New Live Activity API (spec-compliant)
+        case "startLiveActivity":
+            if let args = call.arguments as? [String: Any],
+               let downloadId = args["downloadId"] as? String,
+               let fileName = args["fileName"] as? String,
+               let progress = args["progress"] as? Double,
+               let speed = args["speed"] as? String,
+               let eta = args["eta"] as? String {
+                DownloadManager.shared.startLiveActivity(downloadId: downloadId, fileName: fileName)
+            }
+            result(nil)
+
+        case "updateLiveActivity":
+            if let args = call.arguments as? [String: Any],
+               let downloadId = args["downloadId"] as? String,
+               let progress = args["progress"] as? Double,
+               let speed = args["speed"] as? String,
+               let eta = args["eta"] as? String {
+                let fileName = args["fileName"] as? String ?? ""
+                DownloadManager.shared.updateLiveActivityWithDetails(
+                    downloadId: downloadId,
+                    fileName: fileName,
+                    progress: progress,
+                    speed: speed,
+                    eta: eta,
+                    isCompleted: false
+                )
+            }
+            result(nil)
+
+        case "endLiveActivity":
+            if let args = call.arguments as? [String: Any],
+               let downloadId = args["downloadId"] as? String {
+                DownloadManager.shared.endLiveActivity(downloadId: downloadId, status: "Complete")
+            } else {
+                DownloadManager.shared.endAllLiveActivities()
+            }
+            result(nil)
+
         // Proxy methods
         case "setProxy":
             if let args = call.arguments as? [String: Any] {
@@ -222,6 +264,18 @@ class DownloadPlugin: NSObject, FlutterPlugin {
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
             return windowScene.keyWindow?.rootViewController
         }
+        return nil
+    }
+
+    // MARK: - FlutterStreamHandler (Live Activity errors)
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        DownloadManager.shared.liveActivityErrorSink = events
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        DownloadManager.shared.liveActivityErrorSink = nil
         return nil
     }
 }

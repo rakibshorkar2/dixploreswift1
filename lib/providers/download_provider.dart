@@ -28,9 +28,12 @@ class DownloadProvider with ChangeNotifier {
       EventChannel('com.dirxplore/ios_download_events');
   static const MethodChannel _liveActivityChannel =
       MethodChannel('com.dirxplore/live_activity');
+  static const EventChannel _liveActivityErrorChannel =
+      EventChannel('com.dirxplore/live_activity_errors');
   static const MethodChannel _iosNotificationChannel =
       MethodChannel('com.dirxplore/notifications');
   StreamSubscription? _iosEventSub;
+  StreamSubscription? _liveActivityErrorSub;
 
   final bool _isIOS = Platform.isIOS;
 
@@ -72,6 +75,9 @@ class DownloadProvider with ChangeNotifier {
 
     if (_isIOS) {
       _iosEventSub = _iosEvents.receiveBroadcastStream().listen(_handleiOSEvent);
+      _liveActivityErrorSub = _liveActivityErrorChannel.receiveBroadcastStream().listen((event) {
+        debugPrint('Live Activity error: $event');
+      });
       _iosChannel.invokeMethod('getSavePath').then((path) {
         if (path is String) {
           debugPrint('iOS save path: $path');
@@ -803,6 +809,13 @@ class DownloadProvider with ChangeNotifier {
           '${_formatSize(item.downloadedBytes)} / ${_formatSize(item.totalBytes)}',
     }).catchError((e) { debugPrint('Channel method error: $e'); });
     _liveActivityUpdate(item.id, item.downloadedBytes, item.totalBytes);
+    updateLiveActivity(
+      progress: item.totalBytes > 0 ? item.downloadedBytes / item.totalBytes : 0.0,
+      speed: '${(item.speedBytesPerSec / 1024 / 1024).toStringAsFixed(2)} MB/s',
+      eta: _formatDuration(item.etaSeconds),
+      downloadId: item.id,
+      fileName: item.fileName,
+    );
 
     final now = DateTime.now();
     if (now.difference(_lastNotifyTime).inMilliseconds > 250) {
@@ -883,6 +896,13 @@ class DownloadProvider with ChangeNotifier {
       'downloadId': downloadId,
       'fileName': fileName,
     }).catchError((e) => debugPrint('Live Activity start error: $e'));
+    startLiveActivity(
+      title: fileName,
+      progress: 0.0,
+      speed: 'Starting...',
+      eta: '--',
+      downloadId: downloadId,
+    );
   }
 
   void _liveActivityUpdate(String downloadId, int received, int total) {
@@ -900,6 +920,49 @@ class DownloadProvider with ChangeNotifier {
       'downloadId': downloadId,
       'status': status,
     }).catchError((e) => debugPrint('Live Activity end error: $e'));
+  }
+
+  // --- New Live Activity API (spec-compliant) ---
+
+  void startLiveActivity({
+    required String title,
+    required double progress,
+    required String speed,
+    required String eta,
+    String? downloadId,
+  }) {
+    if (!_isIOS) return;
+    _liveActivityChannel.invokeMethod('startLiveActivity', {
+      'downloadId': downloadId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      'fileName': title,
+      'progress': progress,
+      'speed': speed,
+      'eta': eta,
+    }).catchError((e) => debugPrint('startLiveActivity error: $e'));
+  }
+
+  void updateLiveActivity({
+    required double progress,
+    required String speed,
+    required String eta,
+    String? downloadId,
+    String? fileName,
+  }) {
+    if (!_isIOS) return;
+    _liveActivityChannel.invokeMethod('updateLiveActivity', {
+      'downloadId': downloadId ?? '',
+      'fileName': fileName ?? '',
+      'progress': progress,
+      'speed': speed,
+      'eta': eta,
+    }).catchError((e) => debugPrint('updateLiveActivity error: $e'));
+  }
+
+  void endLiveActivity({String? downloadId}) {
+    if (!_isIOS) return;
+    _liveActivityChannel.invokeMethod('endLiveActivity', {
+      'downloadId': downloadId ?? '',
+    }).catchError((e) => debugPrint('endLiveActivity error: $e'));
   }
 
   void _showiOSNotification(String title, String body) {

@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import Foundation
+import ActivityKit
 import UserNotifications
 
 class DownloadManager: NSObject {
@@ -24,6 +25,7 @@ class DownloadManager: NSObject {
     private var proxyProtocol: String = "http"
     var liveActivityEnabled: Bool = true
     var backgroundCompletionHandler: (() -> Void)?
+    var liveActivityErrorSink: FlutterEventSink?
 
     var eventSink: FlutterEventSink? {
         didSet {
@@ -271,58 +273,108 @@ class DownloadManager: NSObject {
         ])
     }
 
-    // MARK: - Download Progress Notifications
+    // MARK: - Live Activities
+
+    private var liveActivities: [String: Activity<DownloadActivityAttributes>] = [:]
 
     func startLiveActivity(downloadId: String, fileName: String) {
-        guard liveActivityEnabled else { return }
+        guard #available(iOS 16.2, *), liveActivityEnabled else { return }
         fileNameMap[downloadId] = fileName
-        showProgressNotification(downloadId: downloadId, fileName: fileName, received: 0, total: 0, status: "Downloading...")
+        let attributes = DownloadActivityAttributes(downloadId: downloadId)
+        let state = DownloadActivityAttributes.ContentState(
+            fileName: fileName,
+            progress: 0,
+            speed: "Starting...",
+            eta: "--",
+            isCompleted: false
+        )
+        let content = ActivityContent(state: state, staleDate: nil)
+        do {
+            let activity = try Activity.request(
+                attributes: attributes,
+                content: content,
+                pushType: nil
+            )
+            liveActivities[downloadId] = activity
+        } catch {
+            debugPrint("Failed to start Live Activity: \(error)")
+            liveActivityErrorSink?(["event": "startError", "downloadId": downloadId, "error": error.localizedDescription])
+        }
     }
 
     func updateLiveActivity(downloadId: String, received: Int64, total: Int64) {
-        guard liveActivityEnabled else { return }
+        guard #available(iOS 16.2, *),
+              let activity = liveActivities[downloadId] else { return }
         let fileName = fileNameMap[downloadId] ?? "Download"
-        let status = total > 0 ? "\(Int(Double(received) / Double(total) * 100))%" : "Downloading..."
-        showProgressNotification(downloadId: downloadId, fileName: fileName, received: received, total: total, status: status)
+        let progress = total > 0 ? Double(received) / Double(total) : 0.0
+        let speed = formatSpeed(bytesPerSecond: 0)
+        let eta = progress > 0 ? formatEta(remainingBytes: Int64(Double(total) * (1 - progress)), speed: 0) : "--"
+        let state = DownloadActivityAttributes.ContentState(
+            fileName: fileName,
+            progress: progress,
+            speed: speed,
+            eta: eta,
+            isCompleted: false
+        )
+        Task {
+            await activity.update(using: state)
+        }
     }
 
     func endLiveActivity(downloadId: String, status: String) {
+        guard #available(iOS 16.2, *),
+              let activity = liveActivities.removeValue(forKey: downloadId) else { return }
         let fileName = fileNameMap[downloadId] ?? "Download"
-        showProgressNotification(downloadId: downloadId, fileName: fileName, received: 0, total: 0, status: status)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["download-\(downloadId)"])
-        }
-    }
-
-    private func showProgressNotification(downloadId: String, fileName: String, received: Int64, total: Int64, status: String) {
-        let content = UNMutableNotificationContent()
-        content.title = status
-        content.body = fileName
-        if total > 0 {
-            content.body = "\(formatBytes(received)) / \(formatBytes(total)) - \(fileName)"
-        }
-        if status == "Complete" || status == "Failed" || status == "Cancelled" {
-            content.sound = .default
-        }
-        let request = UNNotificationRequest(
-            identifier: "download-\(downloadId)",
-            content: content,
-            trigger: nil
+        let state = DownloadActivityAttributes.ContentState(
+            fileName: fileName,
+            progress: status == "Complete" ? 1.0 : 0.0,
+            speed: "",
+            eta: "",
+            isCompleted: true
         )
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    private func formatBytes(_ bytes: Int64) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f MB", Double(bytes) / (1024 * 1024)) }
-        return String(format: "%.1f GB", Double(bytes) / (1024 * 1024 * 1024))
+        Task {
+            await activity.end(using: state, dismissalPolicy: .after(Date.now.addingTimeInterval(4)))
+        }
     }
 
     func endAllLiveActivities() {
-        let identifiers = fileNameMap.keys.map { "download-\($0)" }
-        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+        guard #available(iOS 16.2, *), liveActivityEnabled else { return }
+        for (_, activity) in liveActivities {
+            Task {
+                await activity.end(dismissalPolicy: .immediate)
+            }
+        }
+        liveActivities.removeAll()
+    }
+
+    func updateLiveActivityWithDetails(downloadId: String, fileName: String, progress: Double, speed: String, eta: String, isCompleted: Bool) {
+        guard #available(iOS 16.2, *),
+              let activity = liveActivities[downloadId] else { return }
+        let state = DownloadActivityAttributes.ContentState(
+            fileName: fileName,
+            progress: progress,
+            speed: speed,
+            eta: eta,
+            isCompleted: isCompleted
+        )
+        Task {
+            await activity.update(using: state)
+        }
+    }
+
+    private func formatSpeed(bytesPerSecond: Int64) -> String {
+        if bytesPerSecond < 1024 { return "\(bytesPerSecond) B/s" }
+        if bytesPerSecond < 1024 * 1024 { return String(format: "%.1f KB/s", Double(bytesPerSecond) / 1024) }
+        if bytesPerSecond < 1024 * 1024 * 1024 { return String(format: "%.1f MB/s", Double(bytesPerSecond) / (1024 * 1024)) }
+        return String(format: "%.1f GB/s", Double(bytesPerSecond) / (1024 * 1024 * 1024))
+    }
+
+    private func formatEta(remainingBytes: Int64, speed: Int64) -> String {
+        guard speed > 0 else { return "--" }
+        let seconds = Double(remainingBytes) / Double(speed)
+        if seconds < 60 { return "\(Int(seconds))s" }
+        if seconds < 3600 { return "\(Int(seconds / 60))m \(Int(seconds.truncatingRemainder(dividingBy: 60)))s" }
+        return "\(Int(seconds / 3600))h \(Int((seconds.truncatingRemainder(dividingBy: 3600)) / 60))m"
     }
 }
 

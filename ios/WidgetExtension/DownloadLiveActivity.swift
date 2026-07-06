@@ -10,31 +10,42 @@ struct DownloadLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(context.state.fileName)
                             .font(.caption)
                             .lineLimit(1)
                             .foregroundColor(.white)
-                        Text(context.state.status)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        if !context.state.isCompleted {
+                            Text(context.state.speed)
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                        }
                     }
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.totalBytes > 0
-                        ? "\(Int(context.state.progress * 100))%"
-                        : "...")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(context.state.isCompleted ? "Done" : "\(Int(context.state.progress * 100))%")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        if !context.state.isCompleted {
+                            Text(context.state.eta)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 4) {
-                        ProgressView(value: context.state.progress)
-                            .tint(.blue)
-                        if context.state.totalBytes > 0 {
-                            Text("\(formatBytes(context.state.receivedBytes)) / \(formatBytes(context.state.totalBytes))")
+                    VStack(spacing: 2) {
+                        ProgressView(value: context.state.isCompleted ? 1.0 : context.state.progress)
+                            .tint(context.state.isCompleted ? .green : .blue)
+                        HStack {
+                            Text(context.state.speed)
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                            Spacer()
+                            Text(context.state.eta)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -43,45 +54,18 @@ struct DownloadLiveActivity: Widget {
                     .padding(.bottom, 4)
                 }
             } compactLeading: {
-                compactLeadingView(context: context)
+                Image(systemName: context.state.isCompleted ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .foregroundColor(context.state.isCompleted ? .green : .blue)
             } compactTrailing: {
-                compactTrailingView(context: context)
+                Text(context.state.isCompleted ? "Done" : "\(Int(context.state.progress * 100))%")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
             } minimal: {
-                minimalView(context: context)
+                Image(systemName: context.state.isCompleted ? "checkmark.circle.fill" : "arrow.down.circle")
+                    .foregroundColor(context.state.isCompleted ? .green : .blue)
             }
         }
-    }
-
-    private func compactLeadingView(context: ActivityViewContext<DownloadActivityAttributes>) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrow.down.circle")
-                .foregroundColor(.blue)
-            Text(context.state.totalBytes > 0
-                ? "\(Int(context.state.progress * 100))%"
-                : "...")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.white)
-        }
-    }
-
-    private func compactTrailingView(context: ActivityViewContext<DownloadActivityAttributes>) -> some View {
-        Text(context.state.status)
-            .font(.caption2)
-            .lineLimit(1)
-            .foregroundColor(.secondary)
-    }
-
-    private func minimalView(context: ActivityViewContext<DownloadActivityAttributes>) -> some View {
-        Image(systemName: "arrow.down.circle")
-            .foregroundColor(.blue)
-    }
-
-    private func formatBytes(_ bytes: Int64) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f MB", Double(bytes) / (1024 * 1024)) }
-        return String(format: "%.1f GB", Double(bytes) / (1024 * 1024 * 1024))
     }
 }
 
@@ -95,37 +79,36 @@ private struct LockScreenView: View {
                 Text(context.state.fileName)
                     .font(.headline)
                     .lineLimit(1)
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.down.circle")
-                        .foregroundColor(.blue)
-                    Text(context.state.status)
+                if context.state.isCompleted {
+                    Label("Complete", systemImage: "checkmark.circle.fill")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.green)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundColor(.blue)
+                        Text(context.state.speed)
+                            .font(.caption)
+                            .foregroundColor(.green)
+                    }
                 }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
-                Text(context.state.totalBytes > 0
-                    ? "\(Int(context.state.progress * 100))%"
-                    : "...")
+                Text(context.state.isCompleted
+                    ? "Done"
+                    : "\(Int(context.state.progress * 100))%")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(context.state.totalBytes > 0
-                    ? "\(formatBytes(context.state.receivedBytes)) / \(formatBytes(context.state.totalBytes))"
-                    : formatBytes(context.state.receivedBytes))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                if !context.state.isCompleted {
+                    Text(context.state.eta)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding()
         .activityBackgroundTint(.black.opacity(0.2))
         .activitySystemActionForegroundColor(.blue)
-    }
-
-    private func formatBytes(_ bytes: Int64) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
-        if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f MB", Double(bytes) / (1024 * 1024)) }
-        return String(format: "%.1f GB", Double(bytes) / (1024 * 1024 * 1024))
     }
 }

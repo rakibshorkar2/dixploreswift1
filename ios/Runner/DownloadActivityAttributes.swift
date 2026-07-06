@@ -4,10 +4,10 @@ import Foundation
 struct DownloadActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var fileName: String
-        var receivedBytes: Int64
-        var totalBytes: Int64
         var progress: Double
-        var status: String
+        var speed: String
+        var eta: String
+        var isCompleted: Bool
     }
 
     var downloadId: String

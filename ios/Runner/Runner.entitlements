@@ -9,5 +9,9 @@
         <string>fetch</string>
         <string>processing</string>
     </array>
+    <key>com.apple.developer.activities</key>
+    <array>
+        <string>com.example.dirBrowser.WidgetExtension</string>
+    </array>
 </dict>
 </plist>
