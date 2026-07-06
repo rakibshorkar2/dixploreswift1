@@ -1,7 +1,7 @@
 import Flutter
 import UIKit
 import Foundation
-import ActivityKit
+import UserNotifications
 
 class DownloadManager: NSObject {
     static let shared = DownloadManager()
@@ -22,7 +22,6 @@ class DownloadManager: NSObject {
     private var proxyPassword: String = ""
     private var proxyEnabled: Bool = false
     private var proxyProtocol: String = "http"
-    private var liveActivities: [String: Activity<DownloadActivityAttributes>] = [:]
     var liveActivityEnabled: Bool = true
     var backgroundCompletionHandler: (() -> Void)?
 
@@ -272,89 +271,58 @@ class DownloadManager: NSObject {
         ])
     }
 
-    // MARK: - Live Activities
+    // MARK: - Download Progress Notifications
 
     func startLiveActivity(downloadId: String, fileName: String) {
-        guard #available(iOS 16.2, *), liveActivityEnabled else { return }
+        guard liveActivityEnabled else { return }
         fileNameMap[downloadId] = fileName
-        let attributes = DownloadActivityAttributes(downloadId: downloadId)
-        let state = DownloadActivityAttributes.ContentState(
-            fileName: fileName,
-            receivedBytes: 0,
-            totalBytes: 0,
-            progress: 0,
-            status: "Downloading..."
-        )
-        let content = ActivityContent(state: state, staleDate: nil)
-        do {
-            let activity = try Activity.request(
-                attributes: attributes,
-                content: content,
-                pushType: nil
-            )
-            liveActivities[downloadId] = activity
-        } catch {
-            debugPrint("Failed to start Live Activity: \(error)")
-        }
+        showProgressNotification(downloadId: downloadId, fileName: fileName, received: 0, total: 0, status: "Downloading...")
     }
 
     func updateLiveActivity(downloadId: String, received: Int64, total: Int64) {
-        guard #available(iOS 16.2, *),
-              let activity = liveActivities[downloadId] else { return }
+        guard liveActivityEnabled else { return }
         let fileName = fileNameMap[downloadId] ?? "Download"
-        let state = DownloadActivityAttributes.ContentState(
-            fileName: fileName,
-            receivedBytes: received,
-            totalBytes: total,
-            progress: total > 0 ? Double(received) / Double(total) : 0,
-            status: total > 0 ? "\(Int(Double(received) / Double(total) * 100))%" : "Downloading..."
-        )
-        Task {
-            await activity.update(using: state)
-        }
+        let status = total > 0 ? "\(Int(Double(received) / Double(total) * 100))%" : "Downloading..."
+        showProgressNotification(downloadId: downloadId, fileName: fileName, received: received, total: total, status: status)
     }
 
     func endLiveActivity(downloadId: String, status: String) {
-        guard #available(iOS 16.2, *),
-              let activity = liveActivities.removeValue(forKey: downloadId) else { return }
+        let fileName = fileNameMap[downloadId] ?? "Download"
+        showProgressNotification(downloadId: downloadId, fileName: fileName, received: 0, total: 0, status: status)
 
-        let currentState = activity.content.state
-        let finalState = DownloadActivityAttributes.ContentState(
-            fileName: currentState.fileName,
-            receivedBytes: currentState.receivedBytes,
-            totalBytes: currentState.totalBytes,
-            progress: currentState.progress,
-            status: status
-        )
-        Task {
-            await activity.end(using: finalState, dismissalPolicy: .after(Date.now.addingTimeInterval(4)))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["download-\(downloadId)"])
         }
     }
 
-    private func updateLiveActivityFileName(downloadId: String, fileName: String) {
-        guard #available(iOS 16.2, *),
-              let activity = liveActivities[downloadId] else { return }
-        let current = activity.content.state as? DownloadActivityAttributes.ContentState
-        let state = DownloadActivityAttributes.ContentState(
-            fileName: fileName,
-            receivedBytes: current?.receivedBytes ?? 0,
-            totalBytes: current?.totalBytes ?? 0,
-            progress: current?.progress ?? 0,
-            status: current?.status ?? "Downloading..."
-        )
-        Task {
-            await activity.update(using: state)
+    private func showProgressNotification(downloadId: String, fileName: String, received: Int64, total: Int64, status: String) {
+        let content = UNMutableNotificationContent()
+        content.title = status
+        content.body = fileName
+        if total > 0 {
+            content.body = "\(formatBytes(received)) / \(formatBytes(total)) - \(fileName)"
         }
+        if status == "Complete" || status == "Failed" || status == "Cancelled" {
+            content.sound = .default
+        }
+        let request = UNNotificationRequest(
+            identifier: "download-\(downloadId)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        if bytes < 1024 { return "\(bytes) B" }
+        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024) }
+        if bytes < 1024 * 1024 * 1024 { return String(format: "%.1f MB", Double(bytes) / (1024 * 1024)) }
+        return String(format: "%.1f GB", Double(bytes) / (1024 * 1024 * 1024))
     }
 
     func endAllLiveActivities() {
-        guard #available(iOS 16.2, *), liveActivityEnabled else { return }
-        for (_, activity) in liveActivities {
-            Task {
-                await activity.end(dismissalPolicy: .immediate)
-            }
-        }
-        liveActivities.removeAll()
+        let identifiers = fileNameMap.keys.map { "download-\($0)" }
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 }
 
