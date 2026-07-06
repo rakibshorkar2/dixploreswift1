@@ -871,7 +871,8 @@ class DownloadProvider with ChangeNotifier {
     if (!_isIOS) return false;
     try {
       return await _liveActivityChannel.invokeMethod('isSupported') ?? false;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Live Activity isSupported error: $e');
       return false;
     }
   }
@@ -881,7 +882,7 @@ class DownloadProvider with ChangeNotifier {
     _liveActivityChannel.invokeMethod('start', {
       'downloadId': downloadId,
       'fileName': fileName,
-    }).catchError((_) {});
+    }).catchError((e) => debugPrint('Live Activity start error: $e'));
   }
 
   void _liveActivityUpdate(String downloadId, int received, int total) {
@@ -890,7 +891,7 @@ class DownloadProvider with ChangeNotifier {
       'downloadId': downloadId,
       'received': received,
       'total': total,
-    }).catchError((_) {});
+    }).catchError((e) => debugPrint('Live Activity update error: $e'));
   }
 
   void _liveActivityEnd(String downloadId, String status) {
@@ -898,7 +899,7 @@ class DownloadProvider with ChangeNotifier {
     _liveActivityChannel.invokeMethod('end', {
       'downloadId': downloadId,
       'status': status,
-    }).catchError((_) {});
+    }).catchError((e) => debugPrint('Live Activity end error: $e'));
   }
 
   void _showiOSNotification(String title, String body) {
@@ -906,28 +907,34 @@ class DownloadProvider with ChangeNotifier {
     _iosNotificationChannel.invokeMethod('show', {
       'title': title,
       'body': body,
-    }).catchError((_) {});
+    }).catchError((e) => debugPrint('iOS notification error: $e'));
   }
 
   Future<void> enableLiveActivity() async {
     if (!_isIOS) return;
     try {
       await _liveActivityChannel.invokeMethod('enable');
-    } catch (_) {}
+      debugPrint('Live Activity enabled');
+    } catch (e) {
+      debugPrint('Live Activity enable error: $e');
+    }
   }
 
   Future<void> disableLiveActivity() async {
     if (!_isIOS) return;
     try {
       await _liveActivityChannel.invokeMethod('disable');
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Live Activity disable error: $e');
+    }
   }
 
   Future<bool> isLiveActivityEnabled() async {
     if (!_isIOS) return false;
     try {
       return await _liveActivityChannel.invokeMethod('isEnabled') ?? true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Live Activity isEnabled error: $e');
       return false;
     }
   }

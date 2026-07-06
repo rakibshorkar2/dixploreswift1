@@ -318,21 +318,16 @@ class DownloadManager: NSObject {
         guard #available(iOS 16.2, *),
               let activity = liveActivities.removeValue(forKey: downloadId) else { return }
 
-        if let current = activity.content.state as? DownloadActivityAttributes.ContentState {
-            let finalState = DownloadActivityAttributes.ContentState(
-                fileName: current.fileName,
-                receivedBytes: current.receivedBytes,
-                totalBytes: current.totalBytes,
-                progress: current.progress,
-                status: status
-            )
-            Task {
-                await activity.end(using: finalState, dismissalPolicy: .after(Date.now.addingTimeInterval(4)))
-            }
-        } else {
-            Task {
-                await activity.end(dismissalPolicy: .after(Date.now.addingTimeInterval(4)))
-            }
+        let currentState = activity.content.state
+        let finalState = DownloadActivityAttributes.ContentState(
+            fileName: currentState.fileName,
+            receivedBytes: currentState.receivedBytes,
+            totalBytes: currentState.totalBytes,
+            progress: currentState.progress,
+            status: status
+        )
+        Task {
+            await activity.end(using: finalState, dismissalPolicy: .after(Date.now.addingTimeInterval(4)))
         }
     }
 
