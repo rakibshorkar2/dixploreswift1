@@ -286,10 +286,11 @@ class DownloadManager: NSObject {
                 updateSingleLiveActivity(info: primaryInfo)
             }
         } else if previousCount > 0 {
-            endSingleLiveActivity()
+            endAllLiveActivities()
         }
     }
 
+    @available(iOS 16.2, *)
     private func startSingleLiveActivity(info: [String: Any]?) {
         let fileName = info?["fileName"] as? String ?? "Downloading..."
         let progress = info?["progress"] as? Double ?? 0
@@ -316,6 +317,7 @@ class DownloadManager: NSObject {
         }
     }
 
+    @available(iOS 16.2, *)
     private func updateSingleLiveActivity(info: [String: Any]?) {
         guard let activity = liveActivity else { return }
         let fileName = info?["fileName"] as? String ?? "Downloading..."
@@ -334,8 +336,9 @@ class DownloadManager: NSObject {
         }
     }
 
+    @available(iOS 16.2, *)
     func endAllLiveActivities() {
-        guard #available(iOS 16.2, *), liveActivityEnabled else { return }
+        guard liveActivityEnabled else { return }
         if let activity = liveActivity {
             liveActivity = nil
             activeDownloadCount = 0

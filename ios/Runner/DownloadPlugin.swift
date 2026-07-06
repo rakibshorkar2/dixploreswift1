@@ -147,7 +147,9 @@ class DownloadPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
         case "disable":
             DownloadManager.shared.liveActivityEnabled = false
-            DownloadManager.shared.endAllLiveActivities()
+            if #available(iOS 16.2, *) {
+                DownloadManager.shared.endAllLiveActivities()
+            }
             result(true)
 
         case "isEnabled":
