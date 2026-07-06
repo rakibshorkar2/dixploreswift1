@@ -79,6 +79,7 @@ void main() async {
   final dlProvider = DownloadProvider();
   await dlProvider.init();
   dlProvider.setMaxConcurrent(appState.maxConcurrentDownloads);
+  dlProvider.onAllDownloadsComplete = () => appState.notifyDownloadsComplete();
 
   final torrentProvider = TorrentProvider();
   await torrentProvider.init();

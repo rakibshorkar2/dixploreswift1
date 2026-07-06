@@ -48,6 +48,7 @@ class DownloadProvider with ChangeNotifier {
   double _totalStorage = 0;
   double _freeStorage = 0;
   bool _isProcessingQueue = false;
+  void Function()? onAllDownloadsComplete;
 
   bool _backgroundServicesRunning = false;
 
@@ -907,6 +908,7 @@ class DownloadProvider with ChangeNotifier {
     }
 
     if (active.isEmpty) {
+      if (onAllDownloadsComplete != null) onAllDownloadsComplete!();
       _liveActivityChannel.invokeMethod('updateActiveDownloads', {
         'count': 0,
         'primary': null,

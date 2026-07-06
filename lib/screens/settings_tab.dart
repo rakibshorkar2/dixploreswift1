@@ -209,6 +209,39 @@ class SettingsTab extends StatelessWidget {
                     value: appState.keepScreenAwake,
                     onChanged: (val) => appState.setKeepScreenAwake(val),
                   ),
+                  if (appState.keepScreenAwake)
+                    _buildGlassTile(
+                      title: Row(
+                        children: [
+                          const Text('Auto-off Timer'),
+                          const Spacer(),
+                          Text(
+                            appState.keepScreenAwakeTimerMinutes == 0
+                                ? 'Off'
+                                : '${appState.keepScreenAwakeTimerMinutes} min',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      subtitle: const Text('Turn off screen wake after set time'),
+                      trailing: SizedBox(
+                        width: 120,
+                        child: Slider(
+                          value: appState.keepScreenAwakeTimerMinutes.toDouble(),
+                          min: 0,
+                          max: 60,
+                          divisions: 12,
+                          label: appState.keepScreenAwakeTimerMinutes == 0
+                              ? 'Off'
+                              : '${appState.keepScreenAwakeTimerMinutes} min',
+                          onChanged: (val) =>
+                              appState.setKeepScreenAwakeTimerMinutes(val.round()),
+                        ),
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 16),

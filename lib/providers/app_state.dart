@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
+import 'dart:async';
 import 'dart:io' show Platform;
 import '../services/torrent_service.dart';
 
@@ -20,6 +21,8 @@ class AppState with ChangeNotifier {
   bool _showDownloadNotifications = true;
   int _speedLimitCap = 0; // 0 means no limit (in KB/s)
   bool _keepScreenAwake = false;
+  int _keepScreenAwakeTimerMinutes = 0;
+  Timer? _keepAwakeTimer;
   bool _smartFolderRouting = false;
   bool _downloadOnWifiOnly = false;
   bool _pauseLowBattery = false;
@@ -49,6 +52,7 @@ class AppState with ChangeNotifier {
   bool get showDownloadNotifications => _showDownloadNotifications;
   int get speedLimitCap => _speedLimitCap;
   bool get keepScreenAwake => _keepScreenAwake;
+  int get keepScreenAwakeTimerMinutes => _keepScreenAwakeTimerMinutes;
   bool get smartFolderRouting => _smartFolderRouting;
   bool get downloadOnWifiOnly => _downloadOnWifiOnly;
   bool get pauseLowBattery => _pauseLowBattery;
@@ -108,6 +112,7 @@ class AppState with ChangeNotifier {
         prefs.getBool('showDownloadNotifications') ?? true;
     _speedLimitCap = prefs.getInt('speedLimitCap') ?? 0;
     _keepScreenAwake = prefs.getBool('keepScreenAwake') ?? false;
+    _keepScreenAwakeTimerMinutes = prefs.getInt('keepScreenAwakeTimerMinutes') ?? 0;
     _smartFolderRouting = prefs.getBool('smartFolderRouting') ?? false;
     _downloadOnWifiOnly = prefs.getBool('downloadOnWifiOnly') ?? false;
     _pauseLowBattery = prefs.getBool('pauseLowBattery') ?? false;
@@ -203,10 +208,44 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> setKeepScreenAwake(bool val) async {
+    _keepAwakeTimer?.cancel();
+    _keepAwakeTimer = null;
     _keepScreenAwake = val;
+    if (val && _keepScreenAwakeTimerMinutes > 0) {
+      _keepAwakeTimer = Timer(Duration(minutes: _keepScreenAwakeTimerMinutes), () {
+        setKeepScreenAwake(false);
+      });
+    }
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('keepScreenAwake', val);
+  }
+
+  Future<void> setKeepScreenAwakeTimerMinutes(int minutes) async {
+    _keepScreenAwakeTimerMinutes = minutes.clamp(0, 60);
+    if (_keepScreenAwake) {
+      _keepAwakeTimer?.cancel();
+      _keepAwakeTimer = null;
+      if (minutes > 0) {
+        _keepAwakeTimer = Timer(Duration(minutes: minutes), () {
+          setKeepScreenAwake(false);
+        });
+      }
+    }
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('keepScreenAwakeTimerMinutes', _keepScreenAwakeTimerMinutes);
+  }
+
+  void notifyDownloadsComplete() {
+    if (!_keepScreenAwake) return;
+    _keepAwakeTimer?.cancel();
+    _keepAwakeTimer = null;
+    _keepScreenAwake = false;
+    notifyListeners();
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setBool('keepScreenAwake', false);
+    });
   }
 
   Future<void> setSmartFolderRouting(bool val) async {
