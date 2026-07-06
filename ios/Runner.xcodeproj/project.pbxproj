@@ -89,7 +89,6 @@
 		FF000006 /* DownloadLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadLiveActivity.swift; sourceTree = "<group>"; };
 		FF000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FF000009 /* WidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		FF00001C /* WidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WidgetExtension.entitlements; sourceTree = "<group>"; };
 		FF00001E /* DownloadPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -176,8 +175,7 @@
 			children = (
 				FF000004 /* WidgetExtensionBundle.swift */,
 				FF000006 /* DownloadLiveActivity.swift */,
-				FF00001C /* WidgetExtension.entitlements */,
-				FF000008 /* Info.plist */,
+					FF000008 /* Info.plist */,
 			);
 			path = WidgetExtension;
 			sourceTree = "<group>";
@@ -698,7 +696,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ABCDEF1234;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -728,7 +725,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ABCDEF1234;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -756,7 +752,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ABCDEF1234;
 				GENERATE_INFOPLIST_FILE = YES;
