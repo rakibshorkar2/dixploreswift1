@@ -9,7 +9,9 @@ import UserNotifications
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         GeneratedPluginRegistrant.register(with: self)
-        DownloadPlugin.register(with: self)
+        if let registrar = self.registrar(forPlugin: "DownloadPlugin") {
+            DownloadPlugin.register(with: registrar)
+        }
 
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
 
