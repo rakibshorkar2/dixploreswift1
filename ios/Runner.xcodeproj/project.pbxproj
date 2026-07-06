@@ -20,6 +20,7 @@
 		FF000003 /* DownloadActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000001 /* DownloadActivityAttributes.swift */; };
 		FF000005 /* WidgetExtensionBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000004 /* WidgetExtensionBundle.swift */; };
 		FF000007 /* DownloadLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000006 /* DownloadLiveActivity.swift */; };
+		FF00001D /* WidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = FF000009 /* WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
+				FF00001D /* WidgetExtension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
