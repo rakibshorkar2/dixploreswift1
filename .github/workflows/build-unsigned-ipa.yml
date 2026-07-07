@@ -55,6 +55,7 @@ jobs:
                     - "Package.swift"
                     - "Tests"
                     - "build"
+                    - "WidgetExtension"
               settings:
                 PRODUCT_BUNDLE_IDENTIFIER: com.dirxplore.app
                 INFOPLIST_FILE: Resources/Info.plist
