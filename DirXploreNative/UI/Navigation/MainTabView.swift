@@ -26,26 +26,33 @@ struct MainTabView: View {
                         }
                         .tag(1)
 
+                    DeepCrawlerView()
+                        .tabItem {
+                            Image(systemName: "sensor.tag.radiowaves.forward")
+                            Text("Crawler")
+                        }
+                        .tag(2)
+
                     ProxyView()
                         .tabItem {
                             Image(systemName: "shield.lefthalf.filled")
                             Text("Proxy")
                         }
-                        .tag(2)
+                        .tag(3)
 
                     TorrentView()
                         .tabItem {
                             Image(systemName: "link.icloud")
                             Text("Torrents")
                         }
-                        .tag(3)
+                        .tag(4)
 
                     SettingsView()
                         .tabItem {
                             Image(systemName: "gear")
                             Text("Settings")
                         }
-                        .tag(4)
+                        .tag(5)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                     Task { @MainActor in

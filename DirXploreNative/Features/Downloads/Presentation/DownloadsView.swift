@@ -103,6 +103,11 @@ struct DownloadsView: View {
                     HashVerificationView(fileURL: URL(fileURLWithPath: item.savePath), fileName: item.fileName)
                 }
             }
+            .sheet(isPresented: $showQuickLook) {
+                if let item = quickLookItem {
+                    QuickLookView(url: URL(fileURLWithPath: item.savePath))
+                }
+            }
             .alert("Clear Completed", isPresented: $showClearConfirmation) {
                 Button("Clear", role: .destructive) { dm.clearCompleted() }
                 Button("Cancel", role: .cancel) {}
@@ -151,27 +156,58 @@ struct DownloadsView: View {
 
     @State private var showHashVerification = false
     @State private var hashVerificationItem: DownloadItem?
+    @State private var showQuickLook = false
+    @State private var quickLookItem: DownloadItem?
 
     @ViewBuilder
     private func downloadContextMenu(_ item: DownloadItem) -> some View {
         switch item.status {
         case .downloading:
             Button { dm.pauseDownload(downloadId: item.id) } label: { Label("Pause", systemImage: "pause") }
-        case .paused, .error:
+            Divider()
+        case .paused:
             Button { dm.resumeDownload(downloadId: item.id) } label: { Label("Resume", systemImage: "play") }
+            Button { dm.restartDownload(downloadId: item.id) } label: { Label("Restart", systemImage: "arrow.counterclockwise") }
+            Divider()
+        case .error:
+            Button { dm.retryDownload(downloadId: item.id) } label: { Label("Retry", systemImage: "arrow.clockwise") }
+            Button { dm.restartDownload(downloadId: item.id) } label: { Label("Restart from Scratch", systemImage: "arrow.counterclockwise") }
+            Divider()
         case .queued:
             Button { dm.cancelDownload(downloadId: item.id) } label: { Label("Cancel", systemImage: "xmark") }
+            Divider()
         case .done:
+            Button { quickLookItem = item; showQuickLook = true } label: { Label("Quick Look", systemImage: "eye") }
             Button { shareFile(item) } label: { Label("Share", systemImage: "square.and.arrow.up") }
             Button { saveToFiles(item) } label: { Label("Save to Files", systemImage: "folder") }
             Divider()
             Button { hashVerificationItem = item; showHashVerification = true } label: { Label("Verify File Hash", systemImage: "checkmark.shield") }
+            Divider()
         }
-        if item.status == .error {
-            Button { dm.retryDownload(downloadId: item.id) } label: { Label("Retry", systemImage: "arrow.clockwise") }
-        }
+        priorityMenu(item)
         Divider()
-        Button(role: .destructive) { dm.deleteDownload(id: item.id, deleteFile: true) } label: { Label("Delete", systemImage: "trash") }
+        Button(role: .destructive) { dm.deleteDownload(id: item.id, deleteFile: true) } label: { Label("Delete with File", systemImage: "trash") }
+        Button(role: .destructive) { dm.deleteDownload(id: item.id) } label: { Label("Remove from List", systemImage: "trash.slash") }
+    }
+
+    @ViewBuilder
+    private func priorityMenu(_ item: DownloadItem) -> some View {
+        Menu {
+            ForEach(DownloadPriority.allCases, id: \.self) { priority in
+                Button {
+                    dm.setPriority(downloadId: item.id, priority: priority)
+                } label: {
+                    HStack {
+                        Text(priority.label)
+                        if item.priority == priority {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label("Priority: \(item.priority.label)", systemImage: "line.horizontal.star.fill.line.horizontal")
+        }
     }
 
     @ViewBuilder
@@ -223,6 +259,7 @@ struct DownloadRow: View {
                         .lineLimit(1)
                     HStack(spacing: 8) {
                         statusBadge
+                        priorityBadge
                         if item.status == .downloading {
                             Text(item.speedFormatted)
                                 .font(.caption2)
@@ -286,6 +323,27 @@ struct DownloadRow: View {
         case .paused: return .orange
         case .error: return .red
         case .done: return .green
+        }
+    }
+
+    @ViewBuilder
+    private var priorityBadge: some View {
+        if item.priority != .normal {
+            Text(item.priority.label.prefix(4))
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(priorityColor)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+                .background(priorityColor.opacity(0.1))
+                .cornerRadius(3)
+        }
+    }
+
+    private var priorityColor: Color {
+        switch item.priority {
+        case .high: return .red
+        case .normal: return .clear
+        case .low: return .gray
         }
     }
 }

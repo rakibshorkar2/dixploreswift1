@@ -1,10 +1,14 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProxyView: View {
     @State private var pm = ProxyManager.shared
     @State private var showAddSheet = false
     @State private var showBulkImport = false
     @State private var showYAMLImport = false
+    @State private var showExport = false
+    @State private var showBypass = false
+    @State private var exportText = ""
 
     var body: some View {
         NavigationStack {
@@ -17,16 +21,35 @@ struct ProxyView: View {
                     )
                 } else {
                     List {
-                        ForEach(pm.proxies) { proxy in
-                            ProxyRow(proxy: proxy, onToggle: { toggleProxy(proxy) })
-                                .contextMenu {
-                                    Button { testProxy(proxy) } label: { Label("Test Ping", systemImage: "antenna.radiowaves.left.and.right") }
-                                    Button(role: .destructive) { pm.deleteProxy(id: proxy.id) } label: { Label("Delete", systemImage: "trash") }
+                        Section {
+                            ForEach(pm.proxies) { proxy in
+                                ProxyRow(proxy: proxy, onToggle: { toggleProxy(proxy) })
+                                    .contextMenu {
+                                        Button { testProxy(proxy) } label: { Label("Test Ping", systemImage: "antenna.radiowaves.left.and.right") }
+                                        Button(role: .destructive) { pm.deleteProxy(id: proxy.id) } label: { Label("Delete", systemImage: "trash") }
+                                    }
+                            }
+                            .onDelete { indexSet in
+                                for index in indexSet {
+                                    pm.deleteProxy(id: pm.proxies[index].id)
                                 }
+                            }
                         }
-                        .onDelete { indexSet in
-                            for index in indexSet {
-                                pm.deleteProxy(id: pm.proxies[index].id)
+
+                        if !pm.bypassList.isEmpty {
+                            Section("Bypass List") {
+                                ForEach(pm.bypassList, id: \.self) { domain in
+                                    HStack {
+                                        Text(domain).font(.caption)
+                                        Spacer()
+                                        Button { pm.removeBypass(domain) } label: {
+                                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary).font(.caption)
+                                        }
+                                    }
+                                }
+                                Button { showBypass = true } label: {
+                                    Label("Add Domain", systemImage: "plus").font(.caption)
+                                }
                             }
                         }
                     }
@@ -41,8 +64,13 @@ struct ProxyView: View {
                         Button { showAddSheet = true } label: { Label("Add Proxy", systemImage: "plus") }
                         Button { showBulkImport = true } label: { Label("Bulk Import", systemImage: "doc.text") }
                         Button { showYAMLImport = true } label: { Label("Import YAML", systemImage: "doc") }
+                        if !pm.proxies.isEmpty {
+                            Divider()
+                            Button { exportProxies() } label: { Label("Export", systemImage: "square.and.arrow.up") }
+                            Button { showBypass = true } label: { Label("Bypass List", systemImage: "exclamationmark.triangle") }
+                        }
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
@@ -53,7 +81,43 @@ struct ProxyView: View {
                     pm.importFromYAML(url: url)
                 }
             }
+            .sheet(isPresented: $showExport) {
+                NavigationStack {
+                    VStack {
+                        TextEditor(text: .constant(exportText))
+                            .font(.caption)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .padding()
+                        Button("Copy to Clipboard") {
+                            UIPasteboard.general.string = exportText
+                            showExport = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding()
+                    }
+                    .navigationTitle("Export Proxies")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { showExport = false } }
+                    }
+                }
+            }
+            .sheet(isPresented: $showBypass) {
+                BypassListView()
+            }
         }
+    }
+
+    private func exportProxies() {
+        exportText = pm.proxies.map { proxy in
+            var uri = "\(proxy.protocolType.rawValue)://\(proxy.host):\(proxy.port)"
+            if !proxy.username.isEmpty {
+                uri = "\(proxy.protocolType.rawValue)://\(proxy.username):\(proxy.password)@\(proxy.host):\(proxy.port)"
+            }
+            return uri
+        }.joined(separator: "\n")
+        showExport = true
     }
 
     private func toggleProxy(_ proxy: ProxyModel) {
@@ -173,6 +237,51 @@ struct AddProxySheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+            }
+        }
+    }
+}
+
+struct BypassListView: View {
+    @State private var pm = ProxyManager.shared
+    @State private var newDomain = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Add Domain") {
+                    HStack {
+                        TextField("example.com", text: $newDomain)
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                        Button("Add") {
+                            pm.addBypass(newDomain.trimmingCharacters(in: .whitespacesAndNewlines))
+                            newDomain = ""
+                        }
+                        .disabled(newDomain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+                Section("Bypassed Domains") {
+                    if pm.bypassList.isEmpty {
+                        Text("No domains in bypass list")
+                            .foregroundColor(.secondary)
+                    }
+                    ForEach(pm.bypassList, id: \.self) { domain in
+                        HStack {
+                            Text(domain).font(.body)
+                            Spacer()
+                            Button { pm.removeBypass(domain) } label: {
+                                Image(systemName: "trash").foregroundColor(.red)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Bypass List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
     }

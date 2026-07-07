@@ -12,20 +12,31 @@ final class DeepCrawler {
     var queueSize = 0
     var currentURL: String = ""
     var visitedURLs: Set<String> = []
+    var concurrencyLimit = 4
+    var maxRetries = 3
+    var pendingQueue: [CrawlTask] = []
 
     private var queue: [CrawlTask] = []
     private var activeTasks: Set<String> = []
+    private var retryCounts: [String: Int] = [:]
     private let httpClient = HTTPClient.shared
     private let parser = HtmlParser.shared
-    private let maxConcurrency = 4
     private var maxDepth = 10
     private var shouldStop = false
     private var pausedContinuation: CheckedContinuation<Void, Never>?
 
-    struct CrawlTask: Sendable {
+    struct CrawlTask: Identifiable, Sendable {
+        let id: UUID
         let url: String
         let depth: Int
         let parentURL: String
+
+        init(url: String, depth: Int, parentURL: String) {
+            self.id = UUID()
+            self.url = url
+            self.depth = depth
+            self.parentURL = parentURL
+        }
     }
 
     private init() {}
@@ -41,11 +52,14 @@ final class DeepCrawler {
         visitedURLs.removeAll()
         queue.removeAll()
         activeTasks.removeAll()
+        retryCounts.removeAll()
+        pendingQueue.removeAll()
 
         let baseURL = url.hasSuffix("/") ? url : url + "/"
         queue.append(CrawlTask(url: baseURL, depth: 0, parentURL: ""))
         queueSize = queue.count
         currentURL = baseURL
+        updatePendingQueue()
 
         Task {
             await processQueue()
@@ -75,6 +89,17 @@ final class DeepCrawler {
         }
         queue.removeAll()
         activeTasks.removeAll()
+        pendingQueue.removeAll()
+    }
+
+    func removeFromQueue(_ task: CrawlTask) {
+        queue.removeAll { $0.id == task.id }
+        pendingQueue.removeAll { $0.id == task.id }
+        queueSize = queue.count
+    }
+
+    private func updatePendingQueue() {
+        pendingQueue = Array(queue.prefix(50))
     }
 
     private func processQueue() async {
@@ -86,12 +111,12 @@ final class DeepCrawler {
                 if shouldStop { break }
             }
 
-            guard activeTasks.count < maxConcurrency else {
+            guard activeTasks.count < concurrencyLimit else {
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 continue
             }
 
-            let tasksToProcess = queue.prefix(maxConcurrency - activeTasks.count)
+            let tasksToProcess = queue.prefix(concurrencyLimit - activeTasks.count)
             queue.removeFirst(min(tasksToProcess.count, queue.count))
 
             for task in tasksToProcess {
@@ -105,6 +130,7 @@ final class DeepCrawler {
             }
 
             queueSize = queue.count
+            updatePendingQueue()
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
@@ -141,7 +167,15 @@ final class DeepCrawler {
             progress = calculateProgress()
 
         } catch {
-            AppLogger.error("Crawl error at \(task.url): \(error)", category: AppLogger.crawler)
+            let retries = retryCounts[task.url, default: 0]
+            if retries < maxRetries {
+                retryCounts[task.url] = retries + 1
+                queue.append(task)
+                queueSize = queue.count
+                AppLogger.info("Retry \(retries + 1)/\(maxRetries) for \(task.url)", category: AppLogger.crawler)
+            } else {
+                AppLogger.error("Crawl failed after \(maxRetries) retries at \(task.url): \(error)", category: AppLogger.crawler)
+            }
         }
     }
 

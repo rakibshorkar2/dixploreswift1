@@ -23,6 +23,8 @@ final class DownloadManager: NSObject {
     private var fileNameMap: [String: String] = [:]
     private var speedTracker: [String: [(timestamp: Date, bytes: Int64)]] = [:]
     private let maxRetries = AppConfiguration.maxRetriesDefault
+    private var lastThrottleCheck: [String: Date] = [:]
+    private let speedLimitCheckInterval: TimeInterval = 0.5
 
     var proxyConfig: ProxyConfiguration?
     var liveActivityEnabled = true
@@ -36,10 +38,18 @@ final class DownloadManager: NSObject {
         let bytes: Int64
     }
 
+    private var resumeDataDir: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let dir = docs.appendingPathComponent("DirXplore/ResumeData", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     private override init() {
         super.init()
         backgroundSession = createSession()
         loadPersistedDownloads()
+        loadAllResumeData()
     }
 
     private func createSession() -> URLSession {
@@ -101,7 +111,7 @@ final class DownloadManager: NSObject {
 
     // MARK: - Public API
 
-    func addDownload(url: String, fileName: String, saveDir: String? = nil, batchId: String? = nil, batchName: String? = nil) -> String {
+    func addDownload(url: String, fileName: String, saveDir: String? = nil, batchId: String? = nil, batchName: String? = nil, priority: DownloadPriority = .normal) -> String {
         if downloads.contains(where: { $0.url == url && $0.status != .done }) {
             AppLogger.info("Duplicate download prevented: \(url)", category: AppLogger.download)
             return downloads.first(where: { $0.url == url })!.id
@@ -131,13 +141,28 @@ final class DownloadManager: NSObject {
             speedBytesPerSec: 0,
             etaSeconds: 0,
             retryCount: 0,
-            addedAt: Date()
+            addedAt: Date(),
+            priority: priority
         )
 
         downloads.insert(item, at: 0)
         persistDownloads()
-        startDownload(downloadId: downloadId)
+        processQueue()
         return downloadId
+    }
+
+    func setPriority(downloadId: String, priority: DownloadPriority) {
+        guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
+        downloads[index].priority = priority
+        persistDownloads()
+        processQueue()
+    }
+
+    func setExpectedChecksum(downloadId: String, checksum: String, type: String) {
+        guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
+        downloads[index].expectedChecksum = checksum
+        downloads[index].checksumType = type
+        persistDownloads()
     }
 
     private func resolveSaveDirectory(fileName: String, preferred: String?) -> URL {
@@ -160,7 +185,6 @@ final class DownloadManager: NSObject {
         else if ext == "ipa" || ext == "apk" { subfolder = "Apps" }
         else if imageExts.contains(ext) { subfolder = "Images" }
         else if docExts.contains(ext) { subfolder = "Documents" }
-        else if videoExts.contains(ext) { subfolder = "Movies" }
 
         let smartDir = baseDir.appendingPathComponent(subfolder)
         try? FileManager.default.createDirectory(at: smartDir, withIntermediateDirectories: true)
@@ -171,6 +195,26 @@ final class DownloadManager: NSObject {
         let free = UIDevice.current.freeDiskSpace
         let minRequired: Int64 = 50 * 1024 * 1024
         return free > minRequired + expectedSize
+    }
+
+    private func processQueue() {
+        let maxConcurrent = AppSettings.shared.maxConcurrentDownloads
+        let activeCount = activeTasks.count
+        let slotsAvailable = max(0, maxConcurrent - activeCount)
+        guard slotsAvailable > 0 else { return }
+
+        let queuedItems = downloads.enumerated().filter { $0.element.status == .queued }
+            .sorted { a, b in
+                if a.element.priority.rawValue != b.element.priority.rawValue {
+                    return a.element.priority.rawValue > b.element.priority.rawValue
+                }
+                return a.offset < b.offset
+            }
+
+        let toStart = queuedItems.prefix(slotsAvailable)
+        for (_, item) in toStart {
+            startDownload(downloadId: item.id)
+        }
     }
 
     func startDownload(downloadId: String) {
@@ -193,7 +237,6 @@ final class DownloadManager: NSObject {
             task.taskDescription = "\(downloadId)|\(fileName)"
             activeTasks[downloadId] = task
             taskIdMap[task.taskIdentifier] = downloadId
-            resumeDataMap.removeValue(forKey: downloadId)
             task.resume()
         } else {
             var request = URLRequest(url: downloadUrl)
@@ -210,6 +253,28 @@ final class DownloadManager: NSObject {
         updateLiveActivity()
     }
 
+    func restartDownload(downloadId: String) {
+        activeTasks[downloadId]?.cancel()
+        activeTasks.removeValue(forKey: downloadId)
+        taskIdMap.removeValue(forKey: (activeTasks[downloadId]?.taskIdentifier ?? 0))
+        resumeDataMap.removeValue(forKey: downloadId)
+        deleteResumeDataOnDisk(downloadId: downloadId)
+        progressMap.removeValue(forKey: downloadId)
+        retryCountMap.removeValue(forKey: downloadId)
+        speedTracker.removeValue(forKey: downloadId)
+        lastThrottleCheck.removeValue(forKey: downloadId)
+
+        guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
+        downloads[index].downloadedBytes = 0
+        downloads[index].totalBytes = 0
+        downloads[index].speedBytesPerSec = 0
+        downloads[index].etaSeconds = 0
+        downloads[index].retryCount = 0
+        downloads[index].status = .queued
+        persistDownloads()
+        processQueue()
+    }
+
     func pauseDownload(downloadId: String) {
         guard let task = activeTasks[downloadId] else {
             updateDownloadStatus(downloadId: downloadId, status: .paused)
@@ -220,6 +285,7 @@ final class DownloadManager: NSObject {
                 guard let self else { return }
                 if let data = possibleResumeData {
                     self.resumeDataMap[downloadId] = data
+                    self.saveResumeDataToDisk(downloadId: downloadId, data: data)
                 }
                 self.activeTasks.removeValue(forKey: downloadId)
                 self.taskIdMap.removeValue(forKey: task.taskIdentifier)
@@ -233,7 +299,9 @@ final class DownloadManager: NSObject {
     func resumeDownload(downloadId: String) {
         guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
         guard downloads[index].status == .paused else { return }
-        startDownload(downloadId: downloadId)
+        downloads[index].status = .queued
+        persistDownloads()
+        processQueue()
     }
 
     func cancelDownload(downloadId: String) {
@@ -241,11 +309,13 @@ final class DownloadManager: NSObject {
         activeTasks.removeValue(forKey: downloadId)
         taskIdMap.removeValue(forKey: (activeTasks[downloadId]?.taskIdentifier ?? 0))
         resumeDataMap.removeValue(forKey: downloadId)
+        deleteResumeDataOnDisk(downloadId: downloadId)
         progressMap.removeValue(forKey: downloadId)
         retryCountMap.removeValue(forKey: downloadId)
         speedTracker.removeValue(forKey: downloadId)
         downloadUrlMap.removeValue(forKey: downloadId)
         fileNameMap.removeValue(forKey: downloadId)
+        lastThrottleCheck.removeValue(forKey: downloadId)
 
         updateDownloadStatus(downloadId: downloadId, status: .error)
         if let index = downloads.firstIndex(where: { $0.id == downloadId }) {
@@ -253,6 +323,7 @@ final class DownloadManager: NSObject {
         }
         activeCount = activeTasks.count
         updateLiveActivity()
+        processQueue()
     }
 
     func pauseAll() {
@@ -301,7 +372,25 @@ final class DownloadManager: NSObject {
         downloads[index].status = .queued
         downloads[index].retryCount = 0
         downloads[index].errorMessage = nil
-        startDownload(downloadId: downloadId)
+        persistDownloads()
+        processQueue()
+    }
+
+    func verifyChecksum(downloadId: String) async -> Bool {
+        guard let index = downloads.firstIndex(where: { $0.id == downloadId }),
+              let expected = downloads[index].expectedChecksum,
+              let type = downloads[index].checksumType else { return false }
+        let filePath = downloads[index].savePath
+        let fileURL = URL(fileURLWithPath: filePath)
+        guard FileManager.default.fileExists(atPath: filePath) else { return false }
+
+        let computed: String?
+        switch type.lowercased() {
+        case "md5": computed = FileHashService.shared.md5(url: fileURL)
+        case "sha256": computed = FileHashService.shared.sha256(url: fileURL)
+        default: computed = FileHashService.shared.sha256(url: fileURL)
+        }
+        return computed?.lowercased() == expected.lowercased()
     }
 
     // MARK: - Persistence
@@ -323,7 +412,10 @@ final class DownloadManager: NSObject {
                 etaSeconds: entity.etaSeconds,
                 retryCount: entity.retryCount,
                 errorMessage: entity.errorMessage,
-                addedAt: entity.addedAt
+                addedAt: entity.addedAt,
+                priority: entity.priority,
+                expectedChecksum: entity.expectedChecksum,
+                checksumType: entity.checksumType
             )
         }
     }
@@ -338,6 +430,9 @@ final class DownloadManager: NSObject {
                 existing.etaSeconds = item.etaSeconds
                 existing.retryCount = item.retryCount
                 existing.errorMessage = item.errorMessage
+                existing.priority = item.priority
+                existing.expectedChecksum = item.expectedChecksum
+                existing.checksumType = item.checksumType
                 DownloadRepository.shared.update(existing)
             } else {
                 let entity = DownloadEntity(
@@ -350,11 +445,40 @@ final class DownloadManager: NSObject {
                     status: item.status,
                     totalBytes: item.totalBytes,
                     downloadedBytes: item.downloadedBytes,
-                    addedAt: item.addedAt
+                    addedAt: item.addedAt,
+                    priority: item.priority,
+                    expectedChecksum: item.expectedChecksum,
+                    checksumType: item.checksumType
                 )
                 DownloadRepository.shared.save(entity)
             }
         }
+    }
+
+    // MARK: - Resume Data Persistence
+
+    private func resumeDataPath(downloadId: String) -> URL {
+        resumeDataDir.appendingPathComponent("\(downloadId).resume")
+    }
+
+    private func saveResumeDataToDisk(downloadId: String, data: Data) {
+        let path = resumeDataPath(downloadId: downloadId)
+        try? data.write(to: path)
+    }
+
+    private func loadAllResumeData() {
+        guard let files = try? FileManager.default.contentsOfDirectory(at: resumeDataDir, includingPropertiesForKeys: nil) else { return }
+        for file in files where file.pathExtension == "resume" {
+            let downloadId = file.deletingPathExtension().lastPathComponent
+            if let data = try? Data(contentsOf: file) {
+                resumeDataMap[downloadId] = data
+            }
+        }
+    }
+
+    private func deleteResumeDataOnDisk(downloadId: String) {
+        let path = resumeDataPath(downloadId: downloadId)
+        try? FileManager.default.removeItem(at: path)
     }
 
     // MARK: - Helpers
@@ -394,6 +518,27 @@ final class DownloadManager: NSObject {
         let dir = paths[0].appendingPathComponent("DirXplore")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    private func enforceSpeedLimit(downloadId: String, bytesWritten: Int64, totalBytesWritten: Int64) {
+        let speedLimitKBps = AppSettings.shared.speedLimitCap
+        guard speedLimitKBps > 0 else { return }
+        let speedLimit = speedLimitKBps * 1024
+
+        let now = Date()
+        let lastCheck = lastThrottleCheck[downloadId] ?? now
+        let elapsed = now.timeIntervalSince(lastCheck)
+        guard elapsed >= speedLimitCheckInterval else { return }
+        lastThrottleCheck[downloadId] = now
+
+        let currentSpeed = elapsed > 0 ? Double(bytesWritten) / elapsed : 0
+        if currentSpeed > speedLimit {
+            let overshoot = currentSpeed - speedLimit
+            let sleepSeconds = overshoot > 0 ? (overshoot / speedLimit) * speedLimitCheckInterval : 0
+            if sleepSeconds > 0 {
+                Thread.sleep(forTimeInterval: min(sleepSeconds, 1.0))
+            }
+        }
     }
 
     // MARK: - Live Activity
@@ -522,8 +667,10 @@ final class DownloadManager: NSObject {
               let imported = try? JSONDecoder().decode([DownloadItem].self, from: data) else { return }
         for item in imported {
             if !downloads.contains(where: { $0.id == item.id }) {
-                downloads.append(item)
-                let entity = DownloadEntity(id: item.id, url: item.url, fileName: item.fileName, savePath: item.savePath, status: .paused)
+                var mutableItem = item
+                mutableItem.status = .paused
+                downloads.append(mutableItem)
+                let entity = DownloadEntity(id: item.id, url: item.url, fileName: item.fileName, savePath: item.savePath, status: .paused, priority: item.priority)
                 DownloadRepository.shared.save(entity)
             }
         }
@@ -548,6 +695,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                 downloads[index].etaSeconds = currentSpeed > 0 ? remaining / currentSpeed : 0
             }
             totalDownloadedBytes += bytesWritten
+            enforceSpeedLimit(downloadId: downloadId, bytesWritten: totalBytesWritten, totalBytesWritten: totalBytesWritten)
         }
     }
 
@@ -582,10 +730,12 @@ extension DownloadManager: URLSessionDownloadDelegate {
                 progressMap.removeValue(forKey: downloadId)
                 retryCountMap.removeValue(forKey: downloadId)
                 resumeDataMap.removeValue(forKey: downloadId)
+                deleteResumeDataOnDisk(downloadId: downloadId)
                 fileNameMap.removeValue(forKey: downloadId)
                 activeCount = activeTasks.count
                 updateLiveActivity()
                 sendNotification(title: "Download Complete", body: fileName)
+                processQueue()
             } catch {
                 guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
                 downloads[index].status = .error
@@ -606,6 +756,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                     let resumeData = error.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
                     if let data = resumeData {
                         resumeDataMap[downloadId] = data
+                        saveResumeDataToDisk(downloadId: downloadId, data: data)
                     }
                 } else {
                     let attempt = retryCountMap[downloadId] ?? 0
@@ -620,6 +771,8 @@ extension DownloadManager: URLSessionDownloadDelegate {
                         let newTask: URLSessionDownloadTask
                         if let data = resumeData {
                             newTask = self.backgroundSession.downloadTask(withResumeData: data)
+                        } else if let cachedResumeData = resumeDataMap[downloadId] {
+                            newTask = self.backgroundSession.downloadTask(withResumeData: cachedResumeData)
                         } else {
                             var request = URLRequest(url: URL(string: downloadUrl)!)
                             request.setValue(AppConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
@@ -637,6 +790,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                         retryCountMap.removeValue(forKey: downloadId)
                         activeCount = activeTasks.count
                         updateLiveActivity()
+                        processQueue()
                     }
                 }
             }
@@ -656,6 +810,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
 
 extension DownloadManager {
     private func sendNotification(title: String, body: String) {
+        guard AppSettings.shared.showDownloadNotifications else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

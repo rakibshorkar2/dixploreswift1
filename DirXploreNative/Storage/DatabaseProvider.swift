@@ -47,8 +47,11 @@ final class DownloadEntity {
     var retryCount: Int
     var errorMessage: String?
     var addedAt: Date
+    var priorityRaw: Int
+    var expectedChecksum: String?
+    var checksumType: String?
 
-    init(id: String, url: String, fileName: String, savePath: String, batchId: String? = nil, batchName: String? = nil, status: DownloadStatus = .queued, totalBytes: Int64 = 0, downloadedBytes: Int64 = 0, speedBytesPerSec: Double = 0, etaSeconds: Double = 0, retryCount: Int = 0, errorMessage: String? = nil, addedAt: Date = Date()) {
+    init(id: String, url: String, fileName: String, savePath: String, batchId: String? = nil, batchName: String? = nil, status: DownloadStatus = .queued, totalBytes: Int64 = 0, downloadedBytes: Int64 = 0, speedBytesPerSec: Double = 0, etaSeconds: Double = 0, retryCount: Int = 0, errorMessage: String? = nil, addedAt: Date = Date(), priority: DownloadPriority = .normal, expectedChecksum: String? = nil, checksumType: String? = nil) {
         self.id = id
         self.url = url
         self.fileName = fileName
@@ -63,11 +66,19 @@ final class DownloadEntity {
         self.retryCount = retryCount
         self.errorMessage = errorMessage
         self.addedAt = addedAt
+        self.priorityRaw = priority.rawValue
+        self.expectedChecksum = expectedChecksum
+        self.checksumType = checksumType
     }
 
     var status: DownloadStatus {
         get { DownloadStatus(rawValue: statusRaw) ?? .queued }
         set { statusRaw = newValue.rawValue }
+    }
+
+    var priority: DownloadPriority {
+        get { DownloadPriority(rawValue: priorityRaw) ?? .normal }
+        set { priorityRaw = newValue.rawValue }
     }
 }
 

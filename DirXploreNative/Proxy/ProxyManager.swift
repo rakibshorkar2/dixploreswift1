@@ -8,9 +8,33 @@ final class ProxyManager {
 
     var proxies: [ProxyModel] = []
     var activeProxy: ProxyModel?
+    var bypassList: [String] = []
+
+    private let bypassKey = "proxy_bypass_list"
 
     private init() {
         loadProxies()
+        loadBypassList()
+    }
+
+    func addBypass(_ domain: String) {
+        let trimmed = domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty, !bypassList.contains(trimmed) else { return }
+        bypassList.append(trimmed)
+        saveBypassList()
+    }
+
+    func removeBypass(_ domain: String) {
+        bypassList.removeAll { $0 == domain }
+        saveBypassList()
+    }
+
+    private func loadBypassList() {
+        bypassList = UserDefaults.standard.stringArray(forKey: bypassKey) ?? []
+    }
+
+    private func saveBypassList() {
+        UserDefaults.standard.set(bypassList, forKey: bypassKey)
     }
 
     func loadProxies() {

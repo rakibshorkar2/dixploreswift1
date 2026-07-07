@@ -14,6 +14,20 @@ enum DownloadStatus: String, Codable, Sendable {
     }
 }
 
+enum DownloadPriority: Int, Codable, Sendable, CaseIterable {
+    case low = 0
+    case normal = 1
+    case high = 2
+
+    var label: String {
+        switch self {
+        case .low: return "Low"
+        case .normal: return "Normal"
+        case .high: return "High"
+        }
+    }
+}
+
 struct DownloadItem: Identifiable, Codable, Sendable, Hashable {
     let id: String
     var url: String
@@ -29,6 +43,9 @@ struct DownloadItem: Identifiable, Codable, Sendable, Hashable {
     var retryCount: Int
     var errorMessage: String?
     var addedAt: Date
+    var priority: DownloadPriority
+    var expectedChecksum: String?
+    var checksumType: String?
 
     var progress: Double {
         guard totalBytes > 0 else { return 0 }

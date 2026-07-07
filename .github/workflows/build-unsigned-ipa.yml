@@ -1,157 +1,130 @@
-name: Build Unsigned IPA (Sideloading)
+name: Build Unsigned IPA
 
 on:
+  workflow_dispatch:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
-  workflow_dispatch:
 
 jobs:
   build:
-    name: Build unsigned IPA
+    name: Build Unsigned IPA
     runs-on: macos-15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
+      - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: List SDKs
-        run: xcodebuild -showsdks
-
-      - name: Install iOS 18.0 Runtime
-        run: xcodebuild -downloadPlatform iOS -quiet || echo "Platform download skipped, attempting build anyway"
-
       - name: Install XcodeGen
-        run: brew install xcodegen 2>/dev/null || true
+        run: |
+          if ! command -v xcodegen &> /dev/null; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          fi
+
+      - name: Clone libtorrent C++ library
+        run: |
+          if [ ! -d "DirXploreNative/Thirdparty/libtorrent/CMakeLists.txt" ]; then
+            rm -rf DirXploreNative/Thirdparty/libtorrent
+            git clone --depth 1 --branch v2.0.11 \
+              https://github.com/arvidn/libtorrent.git \
+              DirXploreNative/Thirdparty/libtorrent
+          fi
+
+      - name: Build C++ libtorrent
+        working-directory: DirXploreNative
+        run: |
+          bash make.sh
+          xcrun xcodebuild -project libtorrent-build/libtorrent.xcodeproj \
+            -scheme libtorrent \
+            -sdk iphoneos \
+            -configuration Release \
+            build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
+            CLANG_CXX_LANGUAGE_STANDARD="c++14" \
+            HEADER_SEARCH_PATHS="$(pwd)/Thirdparty/libtorrent/include"
+          mkdir -p libtorrent-build/Release-iphoneos
+          find libtorrent-build -name "*.a" -exec cp {} libtorrent-build/Release-iphoneos/ \;
 
       - name: Generate Xcode project
+        working-directory: DirXploreNative
+        run: bash setup.sh
+
+      - name: Archive unsigned
+        working-directory: DirXploreNative
         run: |
-          cd DirXploreNative
-          # Create project.yml for xcodegen
-          cat > project.yml << 'XCODEGEN'
-          name: DirXplore
-          options:
-            bundleIdPrefix: com.dirxplore
-            deploymentTarget:
-              iOS: "18.0"
-            xcodeVersion: "16.0"
-          settings:
-            SWIFT_VERSION: "6.0"
-            SWIFT_STRICT_CONCURRENCY: "minimal"
-          packages:
-            Yams:
-              url: https://github.com/jpsim/Yams
-              from: 5.0.0
-          targets:
-            DirXplore:
-              type: application
-              platform: iOS
-              sources:
-                - path: .
-                  excludes:
-                    - "setup.sh"
-                    - "setup.ps1"
-                    - "project.yml"
-                    - "Package.swift"
-                    - "Tests"
-                    - "build"
-                    - "WidgetExtension"
-              settings:
-                PRODUCT_BUNDLE_IDENTIFIER: com.dirxplore.app
-                INFOPLIST_FILE: Resources/Info.plist
-                CODE_SIGN_STYLE: Manual
-                CODE_SIGN_IDENTITY: ""
-                PROVISIONING_PROFILE_SPECIFIER: ""
-                PRODUCT_NAME: DirXplore
-                DEVELOPMENT_TEAM: ""
-                TARGETED_DEVICE_FAMILY: "1,2"
-                IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-              entitlements:
-                path: Resources/App.entitlements
-              dependencies:
-                - package: Yams
-            WidgetExtension:
-              type: app-extension
-              platform: iOS
-              sources:
-                - WidgetExtension
-                - path: Models/DownloadActivityAttributes.swift
-              settings:
-                PRODUCT_BUNDLE_IDENTIFIER: com.dirxplore.app.WidgetExtension
-                INFOPLIST_FILE: WidgetExtension/Info.plist
-                CODE_SIGN_STYLE: Manual
-                CODE_SIGN_IDENTITY: ""
-                PROVISIONING_PROFILE_SPECIFIER: ""
-              dependencies:
-                - target: DirXplore
-          XCODEGEN
-          xcodegen generate
-          echo "Project generated:"
-          ls -la *.xcodeproj 2>/dev/null || echo "No xcodeproj found"
-          
-      - name: Build archive
-        run: |
-          cd DirXploreNative
-          set -o pipefail
-          xcodebuild archive \
+          xcrun xcodebuild archive \
             -project DirXplore.xcodeproj \
             -scheme DirXplore \
             -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
             -configuration Release \
             -archivePath build/DirXplore.xcarchive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            PROVISIONING_PROFILE_SPECIFIER="" \
             DEVELOPMENT_TEAM="" \
-            ARCHS="arm64" \
-            ONLY_ACTIVE_ARCH=NO \
-            2>&1 | tee build.log
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            CLANG_ENABLE_MODULES=YES \
+            CLANG_ENABLE_OBJC_WEAK=YES \
+            SWIFT_VERSION=6.0 \
+            SWIFT_OBJC_BRIDGING_HEADER="$(pwd)/LibTorrent/Bridging-Header.h" \
+            LIBRARY_SEARCH_PATHS="$(pwd)/libtorrent-build/Release-iphoneos $(pwd)/libtorrent-build" \
+            HEADER_SEARCH_PATHS="$(pwd)/Thirdparty/libtorrent/include $(pwd)/LibTorrent $(pwd)/LibTorrent/Core $(pwd)/LibTorrent/Core/Session $(pwd)/LibTorrent/Core/TorrentHandle $(pwd)/LibTorrent/Core/TorrentHandleSnapshot $(pwd)/LibTorrent/Core/TorrentTracker $(pwd)/LibTorrent/Core/TorrentFile $(pwd)/LibTorrent/Core/TorrentFile/File $(pwd)/LibTorrent/Core/TorrentFile/Magnet $(pwd)/LibTorrent/Core/TorrentFile/Downloadable $(pwd)/LibTorrent/Core/FileEntry $(pwd)/LibTorrent/Core/SessionSettings $(pwd)/LibTorrent/Utils" \
+            OTHER_LDFLAGS="$(inherited) -lz -liconv -all_load"
+        continue-on-error: true
 
-      - name: Create unsigned IPA
+      - name: Export unsigned IPA
+        working-directory: DirXploreNative
         run: |
-          cd DirXploreNative
-          ARCHIVE="build/DirXplore.xcarchive"
-          if [ -d "$ARCHIVE" ]; then
-            mkdir -p build/Payload
-            # Find the .app bundle
-            APP_DIR=$(find "$ARCHIVE/Products" -name "*.app" -type d | head -1)
-            if [ -n "$APP_DIR" ]; then
-              cp -R "$APP_DIR" build/Payload/
-              cd build
-              zip -r DirXplore-unsigned.ipa Payload -x "._*" -x ".DS_Store"
-              echo "IPA created successfully!"
-              ls -lh DirXplore-unsigned.ipa
-            else
-              echo "No .app found in archive"
-              find "$ARCHIVE" -name "*.app" -type d 2>/dev/null
-            fi
+          mkdir -p build/ipa
+          cat > build/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Development</string>
+            <key>provisioningProfiles</key>
+            <dict/>
+            <key>teamID</key>
+            <string></string>
+            <key>compileBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+          if [ -d "build/DirXplore.xcarchive" ]; then
+            xcrun xcodebuild -exportArchive \
+              -archivePath build/DirXplore.xcarchive \
+              -exportPath build/ipa \
+              -exportOptionsPlist build/ExportOptions.plist \
+              -allowProvisioningUpdates NO
           else
-            echo "Archive not created. Checking build artifacts..."
-            find build -name "*.app" -type d 2>/dev/null
-            ls -la build/ 2>/dev/null
+            echo "Archive not found. Building app without archive..."
+            xcrun xcodebuild build \
+              -project DirXplore.xcodeproj \
+              -scheme DirXplore \
+              -sdk iphoneos \
+              -configuration Release \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              DEVELOPMENT_TEAM=""
+            # Create basic IPA structure
+            mkdir -p build/ipa/Payload
+            find build/Release-iphoneos -name "*.app" -exec cp -R {} build/ipa/Payload/ \;
+            cd build/ipa && zip -r DirXplore.ipa Payload/ && cd ../..
           fi
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: DirXplore-unsigned-ipa
-          path: DirXploreNative/build/DirXplore-unsigned.ipa
-          compression-level: 0
+          name: DirXplore-Unsigned
+          path: DirXploreNative/build/ipa/*.ipa
           if-no-files-found: warn
-
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: DirXploreNative/build.log
-          if-no-files-found: ignore

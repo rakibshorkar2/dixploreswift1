@@ -1,6 +1,8 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import PDFKit
+import QuickLook
 
 @Observable
 @MainActor
@@ -137,12 +139,25 @@ struct MediaPlayerView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                VideoPlayer(player: vm.player)
-                    .ignoresSafeArea()
-                    .aspectRatio(contentMode: aspectRatioContentMode)
-                    .overlay(controlsOverlay(geometry: geometry))
-                    .onTapGesture { toggleControls() }
-                    .gesture(dragGesture(geometry: geometry))
+                if isVideoFile {
+                    VideoPlayer(player: vm.player)
+                        .ignoresSafeArea()
+                        .aspectRatio(contentMode: aspectRatioContentMode)
+                        .overlay(controlsOverlay(geometry: geometry))
+                        .onTapGesture { toggleControls() }
+                        .gesture(dragGesture(geometry: geometry))
+                } else if isAudioFile {
+                    audioPlayerView
+                } else if isImageFile {
+                    imageViewer
+                } else if isPDFFile {
+                    pdfViewer
+                } else if isTextFile {
+                    textViewer
+                } else {
+                    QuickLookView(url: url)
+                        .ignoresSafeArea()
+                }
 
                 VStack {
                     HStack {
@@ -154,7 +169,7 @@ struct MediaPlayerView: View {
                                 .clipShape(Circle())
                         }
                         Spacer()
-                        if !vm.isLocked {
+                        if !vm.isLocked && isVideoFile {
                             Button { vm.toggleLock() } label: {
                                 Image(systemName: "lock.open")
                                     .padding(12)
@@ -169,8 +184,101 @@ struct MediaPlayerView: View {
                 .opacity(vm.showControls ? 1 : 0)
             }
         }
-        .onAppear { vm.load(url: url) }
+        .onAppear {
+            if isVideoFile || isAudioFile {
+                vm.load(url: url)
+            }
+        }
         .preferredColorScheme(.dark)
+    }
+
+    private var isVideoFile: Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "m3u8"].contains(ext)
+    }
+
+    private var isAudioFile: Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["mp3", "wav", "flac", "aac", "ogg", "wma", "m4a", "opus"].contains(ext)
+    }
+
+    private var isImageFile: Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "heic", "ico"].contains(ext)
+    }
+
+    private var isPDFFile: Bool {
+        url.pathExtension.lowercased() == "pdf"
+    }
+
+    private var isTextFile: Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["txt", "md", "rtf", "json", "xml", "yaml", "yml", "csv", "log", "ini", "cfg", "conf", "plist", "strings"].contains(ext)
+    }
+
+    private var audioPlayerView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "music.note")
+                .font(.system(size: 80))
+                .foregroundColor(.accent)
+            Text(title)
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            if vm.duration > 0 {
+                timeSlider
+                HStack {
+                    Text(vm.currentTime.asDuration).font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                    Text(vm.duration.asDuration).font(.caption).foregroundColor(.secondary)
+                }
+                .padding(.horizontal)
+            }
+
+            HStack(spacing: 32) {
+                controlButton("gobackward.15") { vm.skipBackward(15) }
+                controlButton(vm.isPlaying ? "pause.fill" : "play.fill") { vm.togglePlayPause() }
+                    .font(.system(size: 44))
+                controlButton("goforward.15") { vm.skipForward(15) }
+            }
+
+            speedMenu
+                .foregroundColor(.white)
+
+            Spacer()
+        }
+    }
+
+    private var imageViewer: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().scaledToFit().ignoresSafeArea()
+            case .failure:
+                VStack {
+                    Image(systemName: "photo.badge.exclamationmark").font(.largeTitle)
+                    Text("Failed to load image").foregroundColor(.secondary)
+                }
+            case .empty:
+                ProgressView()
+            @unknown default:
+                EmptyView()
+            }
+        }
+    }
+
+    private var pdfViewer: some View {
+        PDFKitView(url: url)
+            .ignoresSafeArea()
+    }
+
+    private var textViewer: some View {
+        TextFileView(url: url)
+            .ignoresSafeArea()
     }
 
     @ViewBuilder
@@ -307,6 +415,53 @@ struct MediaPlayerView: View {
                     vm.seek(to: seekTime)
                 }
             }
+    }
+}
+
+struct PDFKitView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PDFView {
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        pdfView.displayMode = .singlePageContinuous
+        if let document = PDFDocument(url: url) {
+            pdfView.document = document
+        }
+        return pdfView
+    }
+
+    func updateUIView(_ pdfView: PDFView, context: Context) {}
+}
+
+struct TextFileView: View {
+    let url: URL
+    @State private var content = ""
+    @State private var isLoading = true
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+            } else {
+                ScrollView {
+                    Text(content)
+                        .font(.system(.body, design: .monospaced))
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .background(Color(uiColor: .systemBackground))
+            }
+        }
+        .task {
+            do {
+                content = try String(contentsOf: url, encoding: .utf8)
+            } catch {
+                content = "Unable to read file: \(error.localizedDescription)"
+            }
+            isLoading = false
+        }
     }
 }
 

@@ -1,4 +1,12 @@
 import SwiftUI
+import WebKit
+import QuickLook
+
+enum SortOption: String, CaseIterable {
+    case name = "Name"
+    case size = "Size"
+    case date = "Date"
+}
 
 @Observable
 @MainActor
@@ -17,12 +25,51 @@ final class BrowserViewModel {
     var sortFoldersFirst = true
     var selectedItems: Set<String> = []
     var isSelectionMode = false
+    var sortOption: SortOption = .name
+    var sortAscending = true
+    var showPreview = false
+    var previewItem: DirectoryItem?
+    var page = 0
+    var pageSize = 50
 
     private var history: [String] = []
     private(set) var historyIndex = -1
     private let parser = HtmlParser.shared
 
     let categories = ["All", "Movies", "Series/TV", "Games", "Software", "Anime", "Images"]
+
+    var canGoForward: Bool { historyIndex < history.count - 1 }
+
+    var totalPages: Int {
+        max(1, Int(ceil(Double(filteredEntries.count) / Double(pageSize))))
+    }
+
+    var pageEntries: [DirectoryItem] {
+        let start = page * pageSize
+        guard start < filteredEntries.count else { return [] }
+        return Array(filteredEntries[start..<min(start + pageSize, filteredEntries.count)])
+    }
+
+    func goForward() {
+        guard historyIndex < history.count - 1 else { return }
+        historyIndex += 1
+        loadURL(history[historyIndex])
+    }
+
+    func nextPage() {
+        guard page < totalPages - 1 else { return }
+        page += 1
+    }
+
+    func prevPage() {
+        guard page > 0 else { return }
+        page -= 1
+    }
+
+    func openPreview(_ item: DirectoryItem) {
+        previewItem = item
+        showPreview = true
+    }
 
     func loadURL(_ url: String) {
         var normalizedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -60,6 +107,7 @@ final class BrowserViewModel {
                     )
                 }
                 updateBreadcrumbs(from: normalizedURL)
+                page = 0
                 applyFilters()
                 isLoading = false
             } catch {
@@ -162,7 +210,16 @@ final class BrowserViewModel {
                 if a.type == .directory && b.type != .directory { return true }
                 if a.type != .directory && b.type == .directory { return false }
             }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            switch sortOption {
+            case .name:
+                return sortAscending
+                    ? a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                    : a.name.localizedCaseInsensitiveCompare(b.name) == .orderedDescending
+            case .size:
+                return sortAscending ? a.size < b.size : a.size > b.size
+            case .date:
+                return sortAscending ? a.size < b.size : a.size > b.size
+            }
         }
 
         filteredEntries = result
@@ -218,11 +275,19 @@ struct BrowserView: View {
                     } else {
                         listView
                     }
+                    if vm.filteredEntries.count > vm.pageSize {
+                        paginationBar
+                    }
                 }
             }
             .navigationTitle("Browser")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if !vm.isSelectionMode {
+                        sortMenu
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack {
                         if vm.isSelectionMode {
@@ -248,6 +313,25 @@ struct BrowserView: View {
                     vm.showBookmarks = false
                 })
             }
+            .sheet(isPresented: $vm.showPreview) {
+                if let item = vm.previewItem {
+                    FilePreviewView(item: item)
+                }
+            }
+            .background {
+                Button("") { if !vm.urlString.isEmpty { vm.loadURL(vm.urlString) } }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .opacity(0)
+                Button("") { vm.goBack() }
+                    .keyboardShortcut("[", modifiers: .command)
+                    .opacity(0)
+                Button("") { vm.goForward() }
+                    .keyboardShortcut("]", modifiers: .command)
+                    .opacity(0)
+                Button("") { withAnimation { vm.toggleViewMode() } }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+                    .opacity(0)
+            }
         }
     }
 
@@ -255,6 +339,8 @@ struct BrowserView: View {
         HStack(spacing: 8) {
             Button { vm.goBack() } label: { Image(systemName: "chevron.left").font(.body) }
                 .disabled(vm.historyIndex <= 0)
+            Button { vm.goForward() } label: { Image(systemName: "chevron.right").font(.body) }
+                .disabled(!vm.canGoForward)
             Button { vm.goUp() } label: { Image(systemName: "chevron.up").font(.body) }
                 .disabled(vm.urlString.isEmpty)
 
@@ -316,6 +402,48 @@ struct BrowserView: View {
         }
     }
 
+    private var sortMenu: some View {
+        Menu {
+            ForEach(SortOption.allCases, id: \.self) { option in
+                Button {
+                    if vm.sortOption == option {
+                        vm.sortAscending.toggle()
+                    } else {
+                        vm.sortOption = option
+                        vm.sortAscending = true
+                    }
+                    vm.applyFilters()
+                } label: {
+                    HStack {
+                        Text(option.rawValue)
+                        if vm.sortOption == option {
+                            Image(systemName: vm.sortAscending ? "arrow.up" : "arrow.down")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+    }
+
+    private var paginationBar: some View {
+        HStack {
+            Button { vm.prevPage() } label: { Image(systemName: "chevron.left") }
+                .disabled(vm.page <= 0)
+            Text("Page \(vm.page + 1) of \(vm.totalPages)")
+                .font(.caption)
+            Button { vm.nextPage() } label: { Image(systemName: "chevron.right") }
+                .disabled(vm.page >= vm.totalPages - 1)
+            Spacer()
+            Text("\(vm.filteredEntries.count) items")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+    }
+
     private var searchBar: some View {
         HStack {
             Image(systemName: "magnifyingglass")
@@ -332,12 +460,14 @@ struct BrowserView: View {
 
     private var listView: some View {
         List {
-            ForEach(vm.filteredEntries) { item in
+            ForEach(vm.pageEntries) { item in
                 DirectoryRow(item: item, isSelectionMode: vm.isSelectionMode) {
                     if vm.isSelectionMode {
                         vm.toggleSelection(for: item)
                     } else if item.type == .directory {
                         vm.loadURL(item.url)
+                    } else {
+                        vm.openPreview(item)
                     }
                 }
                 .contextMenu {
@@ -360,12 +490,14 @@ struct BrowserView: View {
     private var gridView: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100, maximum: 150))], spacing: 12) {
-                ForEach(vm.filteredEntries) { item in
+                ForEach(vm.pageEntries) { item in
                     DirectoryGridItem(item: item, isSelected: item.isSelected) {
                         if vm.isSelectionMode {
                             vm.toggleSelection(for: item)
                         } else if item.type == .directory {
                             vm.loadURL(item.url)
+                        } else {
+                            vm.openPreview(item)
                         }
                     }
                     .contextMenu {
@@ -459,6 +591,60 @@ struct DirectoryGridItem: View {
             .overlay(isSelected ? RoundedRectangle(cornerRadius: 8).stroke(Color.blue, lineWidth: 2) : nil)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct FilePreviewView: View {
+    let item: DirectoryItem
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Group {
+            switch item.type {
+            case .video, .audio:
+                MediaPlayerView(url: URL(string: item.url)!, title: item.name)
+            case .image:
+                AsyncImage(url: URL(string: item.url)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFit().ignoresSafeArea()
+                    case .failure:
+                        ContentUnavailableView("Failed to load image", systemImage: "photo")
+                    case .empty:
+                        ProgressView()
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            case .document:
+                WebKitView(url: URL(string: item.url)!)
+                    .ignoresSafeArea()
+            default:
+                QuickLookView(url: URL(string: item.url)!)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .padding(12)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            }
+            .padding()
+        }
+    }
+}
+
+struct WebKitView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        WKWebView()
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        webView.load(URLRequest(url: url))
     }
 }
 

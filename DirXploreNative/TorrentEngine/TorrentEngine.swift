@@ -10,14 +10,33 @@ final class TorrentEngine {
     var isInitialized = false
 
     private var timer: Timer?
+    private let sessionManager = LibTorrentSessionManager.shared
+    private var addedAtMap: [String: Date] = [:]
+    private var magnetLinkMap: [String: String] = [:]
 
     private init() {}
 
     func initialize() {
         guard !isInitialized else { return }
         isInitialized = true
+
+        sessionManager.initialize()
         loadTorrents()
+
+        for torrent in activeTorrents {
+            if !torrent.magnetLink.isEmpty {
+                let url = URL(string: torrent.magnetLink)
+                if let url, sessionManager.activeHandles[torrent.hash] == nil {
+                    let handle = sessionManager.addMagnet(url)
+                    if let handle {
+                        addedAtMap[torrent.hash] = torrent.addedAt
+                    }
+                }
+            }
+        }
+
         startPolling()
+        AppLogger.info("TorrentEngine initialized with LibTorrent", category: AppLogger.torrent)
     }
 
     func addMagnet(_ magnet: String, name: String? = nil) {
@@ -26,44 +45,75 @@ final class TorrentEngine {
             return
         }
 
-        let item = TorrentItem(
-            id: hash,
-            name: name ?? "Torrent \(hash.prefix(8))",
-            hash: hash,
-            magnetLink: magnet,
-            savePath: defaultTorrentPath().path,
-            status: .downloading,
-            progress: 0,
-            size: 0,
-            speed: 0,
-            addedAt: Date(),
-            isSequential: false
-        )
+        guard let url = URL(string: magnet) else { return }
 
-        activeTorrents.insert(item, at: 0)
+        if sessionManager.activeHandles[hash] != nil { return }
+
+        let handle = sessionManager.addMagnet(url)
+        let now = Date()
+
+        addedAtMap[hash] = now
+        magnetLinkMap[hash] = magnet
+
+        let item: TorrentItem
+        if let handle, let snapshot = handle.snapshot {
+            item = snapshot.toTorrentItem(hash: hash, magnetLink: magnet, addedAt: now)
+        } else {
+            item = TorrentItem(
+                id: hash,
+                name: name ?? "Torrent \(hash.prefix(8))",
+                hash: hash,
+                magnetLink: magnet,
+                savePath: defaultTorrentPath().path,
+                status: .downloading,
+                progress: 0,
+                size: 0,
+                speed: 0,
+                addedAt: now,
+                isSequential: false
+            )
+        }
+
+        if !activeTorrents.contains(where: { $0.id == hash }) {
+            activeTorrents.insert(item, at: 0)
+        }
         persistTorrents()
     }
 
     func pauseTorrent(id: String) {
+        sessionManager.pauseTorrent(hash: id)
         guard let index = activeTorrents.firstIndex(where: { $0.id == id }) else { return }
         activeTorrents[index].status = .paused
         persistTorrents()
     }
 
     func resumeTorrent(id: String) {
+        sessionManager.resumeTorrent(hash: id)
         guard let index = activeTorrents.firstIndex(where: { $0.id == id }) else { return }
         activeTorrents[index].status = .downloading
         persistTorrents()
     }
 
     func deleteTorrent(id: String) {
+        sessionManager.removeTorrent(hash: id, deleteFiles: false)
         activeTorrents.removeAll { $0.id == id }
+        addedAtMap.removeValue(forKey: id)
+        magnetLinkMap.removeValue(forKey: id)
+        TorrentRepository.shared.delete(id: id)
+    }
+
+    func deleteTorrentWithFiles(id: String) {
+        sessionManager.removeTorrent(hash: id, deleteFiles: true)
+        activeTorrents.removeAll { $0.id == id }
+        addedAtMap.removeValue(forKey: id)
+        magnetLinkMap.removeValue(forKey: id)
         TorrentRepository.shared.delete(id: id)
     }
 
     func toggleSequential(id: String) {
         guard let index = activeTorrents.firstIndex(where: { $0.id == id }) else { return }
         activeTorrents[index].isSequential.toggle()
+        sessionManager.setSequentialDownload(hash: id, enabled: activeTorrents[index].isSequential)
         persistTorrents()
     }
 
@@ -85,6 +135,43 @@ final class TorrentEngine {
             isSequential: false
         )
         return resolved
+    }
+
+    func setFilePriority(hash: String, fileIndex: Int, priority: UInt8) {
+        let fp: FileEntry.Priority
+        switch priority {
+        case 0: fp = .dontDownload
+        case 1: fp = .low
+        case 7: fp = .top
+        default: fp = .default
+        }
+        sessionManager.setFilePriority(hash: hash, fileIndex: fileIndex, priority: fp)
+    }
+
+    func addTracker(hash: String, url: String) {
+        sessionManager.addTracker(hash: hash, url: url)
+    }
+
+    func reannounce(hash: String) {
+        sessionManager.reannounce(hash: hash)
+    }
+
+    func pauseAll() {
+        sessionManager.pauseAll()
+        for i in activeTorrents.indices {
+            activeTorrents[i].status = .paused
+        }
+        persistTorrents()
+    }
+
+    func resumeAll() {
+        sessionManager.resumeAll()
+        for i in activeTorrents.indices {
+            if activeTorrents[i].status == .paused {
+                activeTorrents[i].status = .downloading
+            }
+        }
+        persistTorrents()
     }
 
     // MARK: - Private
@@ -109,6 +196,43 @@ final class TorrentEngine {
         return dir
     }
 
+    private func syncSnapshotsToItems() {
+        sessionManager.updateSnapshots()
+
+        for (hash, snapshot) in sessionManager.handleSnapshots {
+            guard let snapshot, snapshot.isValid else { continue }
+
+            let magnet = magnetLinkMap[hash] ?? snapshot.magnetLink
+            let addedAt = addedAtMap[hash] ?? Date()
+
+            if let index = activeTorrents.firstIndex(where: { $0.id == hash }) {
+                activeTorrents[index].name = snapshot.name ?? activeTorrents[index].name
+                activeTorrents[index].status = snapshot.state.toTorrentStatus
+                activeTorrents[index].progress = snapshot.progress
+                activeTorrents[index].size = Int64(snapshot.total)
+                activeTorrents[index].speed = Double(snapshot.downloadRate)
+                activeTorrents[index].isSequential = snapshot.isSequential
+                activeTorrents[index].savePath = snapshot.downloadPath?.path ?? activeTorrents[index].savePath
+
+                if snapshot.hasMetadata {
+                    activeTorrents[index].files = snapshot.files.map { entry in
+                        TorrentFileInfo(
+                            path: entry.path,
+                            size: Int64(entry.size),
+                            selected: entry.priority.rawValue > 0
+                        )
+                    }
+                    activeTorrents[index].trackers = snapshot.trackers.map(\.trackerUrl)
+                }
+            } else {
+                let item = snapshot.toTorrentItem(hash: hash, magnetLink: magnet, addedAt: addedAt)
+                addedAtMap[hash] = addedAt
+                magnetLinkMap[hash] = magnet
+                activeTorrents.append(item)
+            }
+        }
+    }
+
     private func loadTorrents() {
         let entities = TorrentRepository.shared.getAll()
         activeTorrents = entities.map { entity in
@@ -126,6 +250,10 @@ final class TorrentEngine {
                 isSequential: entity.isSequential
             )
         }
+        for torrent in activeTorrents {
+            addedAtMap[torrent.id] = torrent.addedAt
+            magnetLinkMap[torrent.id] = torrent.magnetLink
+        }
     }
 
     private func persistTorrents() {
@@ -134,6 +262,8 @@ final class TorrentEngine {
                 existing.progress = item.progress
                 existing.speed = item.speed
                 existing.status = item.status
+                existing.size = item.size
+                existing.name = item.name
                 TorrentRepository.shared.update(existing)
             } else {
                 let entity = TorrentEntity(
@@ -158,6 +288,7 @@ final class TorrentEngine {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                self.syncSnapshotsToItems()
                 self.persistTorrents()
             }
         }

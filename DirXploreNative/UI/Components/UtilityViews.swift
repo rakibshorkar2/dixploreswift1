@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import WebKit
+import QuickLook
 
 struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
@@ -58,6 +59,59 @@ struct WebView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         webView.load(URLRequest(url: url))
+    }
+}
+
+struct QuickLookView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> QLPreviewController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: QLPreviewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(url: url)
+    }
+
+    class Coordinator: NSObject, QLPreviewControllerDataSource {
+        let url: URL
+        init(url: URL) { self.url = url }
+
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+            url as NSURL
+        }
+    }
+}
+
+struct DragDropDelegate: ViewModifier {
+    let item: URL
+
+    func body(content: Content) -> some View {
+        content.onDrag { NSItemProvider(object: item.lastPathComponent as NSString) }
+    }
+}
+
+extension View {
+    func dragFile(_ url: URL) -> some View {
+        modifier(DragDropDelegate(item: url))
+    }
+
+    func onDropFile(isTargeted: Binding<Bool>, _ action: @escaping (URL) -> Void) -> some View {
+        self.onDrop(of: [.fileURL], isTargeted: isTargeted) { providers in
+            guard let provider = providers.first else { return false }
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                guard let data = item as? Data,
+                      let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
+                Task { @MainActor in action(url) }
+            }
+            return true
+        }
     }
 }
 

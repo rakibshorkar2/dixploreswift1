@@ -13,6 +13,28 @@ final class TorrentViewModel {
     var showProviderPicker = false
     var clipboardMagnet: String?
     var showClipboardAlert = false
+    private var syncTimer: Timer?
+
+    init() {
+        syncEngine()
+        startSyncTimer()
+    }
+
+    deinit {
+        syncTimer?.invalidate()
+    }
+
+    private func syncEngine() {
+        activeTorrents = TorrentEngine.shared.activeTorrents
+    }
+
+    private func startSyncTimer() {
+        syncTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.syncEngine()
+            }
+        }
+    }
 
     func search() {
         guard !searchQuery.isEmpty else { return }
@@ -39,7 +61,7 @@ final class TorrentViewModel {
 
     func addMagnet(_ magnet: String) {
         TorrentEngine.shared.addMagnet(magnet)
-        activeTorrents = TorrentEngine.shared.activeTorrents
+        syncEngine()
         AppLogger.info("Added magnet: \(magnet)", category: AppLogger.torrent)
     }
 }
