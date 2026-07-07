@@ -40,7 +40,7 @@ final class MediaPlayerViewModel {
         player?.rate = playbackSpeed
         player?.volume = volume
 
-        timeObserver = player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600)) { [weak self] time in
+        timeObserver = player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) { [weak self] time in
             Task { @MainActor in
                 self?.currentTime = time.seconds
             }
@@ -120,8 +120,10 @@ final class MediaPlayerViewModel {
     }
 
     deinit {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
+        Task { @MainActor in
+            if let observer = self.timeObserver {
+                self.player?.removeTimeObserver(observer)
+            }
         }
     }
 }

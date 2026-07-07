@@ -611,29 +611,31 @@ extension DownloadManager: URLSessionDownloadDelegate {
                     resumeDataMap[downloadId] = data
                 }
             } else {
-                let attempt = retryCountMap[downloadId] ?? 0
-                if attempt < maxRetries, let downloadUrl = downloadUrlMap[downloadId] {
-                    retryCountMap[downloadId] = attempt + 1
-                    let delay = Double(1 << attempt)
-                    AppLogger.info("Retrying download \(downloadId) in \(delay)s (attempt \(attempt + 1)/\(maxRetries))", category: .download)
-                    DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
-                        guard let self, self.retryCountMap[downloadId] != nil else { return }
-                        let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-                        let newTask: URLSessionDownloadTask
-                        if let data = resumeData {
-                            newTask = self.backgroundSession.downloadTask(withResumeData: data)
-                        } else {
-                            var request = URLRequest(url: URL(string: downloadUrl)!)
-                            request.setValue(AppConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
-                            newTask = self.backgroundSession.downloadTask(with: request)
+                Task { @MainActor in
+                    let attempt = retryCountMap[downloadId] ?? 0
+                    if attempt < maxRetries, let downloadUrl = downloadUrlMap[downloadId] {
+                        retryCountMap[downloadId] = attempt + 1
+                        let delay = Double(1 << attempt)
+                        AppLogger.info("Retrying download \(downloadId) in \(delay)s (attempt \(attempt + 1)/\(maxRetries))", category: .download)
+                        let delayNs = UInt64(delay * 1_000_000_000)
+                        Task { @MainActor in
+                            guard let self, self.retryCountMap[downloadId] != nil else { return }
+                            try? await Task.sleep(nanoseconds: delayNs)
+                            let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+                            let newTask: URLSessionDownloadTask
+                            if let data = resumeData {
+                                newTask = self.backgroundSession.downloadTask(withResumeData: data)
+                            } else {
+                                var request = URLRequest(url: URL(string: downloadUrl)!)
+                                request.setValue(AppConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
+                                newTask = self.backgroundSession.downloadTask(with: request)
+                            }
+                            newTask.taskDescription = task.taskDescription ?? "\(downloadId)|\(fileNameMap[downloadId] ?? "file")"
+                            self.activeTasks[downloadId] = newTask
+                            self.taskIdMap[newTask.taskIdentifier] = downloadId
+                            newTask.resume()
                         }
-                        newTask.taskDescription = task.taskDescription ?? "\(downloadId)|\(fileNameMap[downloadId] ?? "file")"
-                        self.activeTasks[downloadId] = newTask
-                        self.taskIdMap[newTask.taskIdentifier] = downloadId
-                        newTask.resume()
-                    }
-                } else {
-                    Task { @MainActor in
+                    } else {
                         guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
                         downloads[index].status = .error
                         downloads[index].errorMessage = error.localizedDescription

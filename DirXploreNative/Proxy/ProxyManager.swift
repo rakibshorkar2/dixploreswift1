@@ -79,7 +79,8 @@ final class ProxyManager {
 
     func importFromYAML(url: URL) {
         guard let data = try? Data(contentsOf: url),
-              let yaml = try? Yams.load(yaml: data) as? [String: Any],
+              let yamlString = String(data: data, encoding: .utf8),
+              let yaml = try? Yams.load(yaml: yamlString) as? [String: Any],
               let proxyList = yaml["proxies"] as? [[String: Any]] else { return }
 
         for proxyDict in proxyList {

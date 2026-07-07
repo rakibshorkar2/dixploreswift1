@@ -84,7 +84,7 @@ struct SettingsView: View {
 
     private var hapticsSection: some View {
         Section("HAPTICS & FEEDBACK") {
-            Toggle("Haptic Feedback", isOn: HapticFeedback.isEnabled)
+            Toggle("Haptic Feedback", isOn: Binding(get: { HapticFeedback.isEnabled }, set: { HapticFeedback.setEnabled($0) }))
         }
     }
 

@@ -90,7 +90,7 @@ final class DownloadPreviewViewModel {
         return count
     }
 
-    private func shouldAutoSelect(_ entry: ParsedEntry) -> Bool {
+    private func shouldAutoSelect(_ entry: HtmlParser.ParsedEntry) -> Bool {
         let name = entry.name.lowercased()
         let ext = (name as NSString).pathExtension
         let videoExts = ["mp4", "mkv", "avi", "mov", "m4v", "webm"]
@@ -215,11 +215,4 @@ struct DownloadPreviewView: View {
             .padding(.vertical, 4)
         }
     }
-}
-
-private struct ParsedEntry {
-    var name: String
-    var href: String
-    var isDirectory: Bool
-    var sizeLabel: String
 }

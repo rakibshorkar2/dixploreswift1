@@ -70,7 +70,7 @@ actor TorrentSearchService {
                     do {
                         return try await self.searchProvider(provider, query: query)
                     } catch {
-                        AppLogger.error("Search failed for \(provider.displayName): \(error)", category: .torrent)
+                        AppLogger.error("Search failed for \(provider.displayName): \(error)", category: AppLogger.torrent)
                         return []
                     }
                 }

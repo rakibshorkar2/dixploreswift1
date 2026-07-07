@@ -9,6 +9,7 @@ struct PinLockScreen: View {
     @State private var securityAnswer = ""
     @State private var forgotPinError = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
 
     private let pinLength = 6
 

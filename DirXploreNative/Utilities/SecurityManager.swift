@@ -1,5 +1,6 @@
 import Foundation
 import LocalAuthentication
+import CommonCrypto
 
 enum LockType: String, Codable, Sendable {
     case none, device, custom

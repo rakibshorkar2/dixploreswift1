@@ -45,16 +45,18 @@ final class DownloadRepository {
     }
 
     func getActive() -> [DownloadEntity] {
+        let activeRawValues = [DownloadStatus.downloading.rawValue, DownloadStatus.queued.rawValue]
         let descriptor = FetchDescriptor<DownloadEntity>(
-            predicate: #Predicate { $0.statusRaw == DownloadStatus.downloading.rawValue || $0.statusRaw == DownloadStatus.queued.rawValue },
+            predicate: #Predicate { activeRawValues.contains($0.statusRaw) },
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )
         return (try? context.fetch(descriptor)) ?? []
     }
 
     func getCompleted() -> [DownloadEntity] {
+        let doneRawValue = DownloadStatus.done.rawValue
         let descriptor = FetchDescriptor<DownloadEntity>(
-            predicate: #Predicate { $0.statusRaw == DownloadStatus.done.rawValue },
+            predicate: #Predicate { $0.statusRaw == doneRawValue },
             sortBy: [SortDescriptor(\.addedAt, order: .reverse)]
         )
         return (try? context.fetch(descriptor)) ?? []

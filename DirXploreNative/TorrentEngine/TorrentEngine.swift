@@ -22,7 +22,7 @@ final class TorrentEngine {
 
     func addMagnet(_ magnet: String, name: String? = nil) {
         guard let hash = extractHash(from: magnet) else {
-            AppLogger.error("Invalid magnet link", category: .torrent)
+            AppLogger.error("Invalid magnet link", category: AppLogger.torrent)
             return
         }
 

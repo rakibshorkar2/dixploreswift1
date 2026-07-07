@@ -40,7 +40,7 @@ final class TorrentViewModel {
     func addMagnet(_ magnet: String) {
         TorrentEngine.shared.addMagnet(magnet)
         activeTorrents = TorrentEngine.shared.activeTorrents
-        AppLogger.info("Added magnet: \(magnet)", category: .torrent)
+        AppLogger.info("Added magnet: \(magnet)", category: AppLogger.torrent)
     }
 }
 
@@ -315,6 +315,7 @@ struct AddTorrentSheet: View {
 }
 
 struct ProviderPickerView: View {
+    @Environment(\.dismiss) private var dismiss
     @Binding var selected: Set<TorrentProvider>
 
     var body: some View {

@@ -20,11 +20,13 @@ final class ProxyTunnel {
         let parameters = NWParameters.tcp
         listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: port) ?? .init(rawValue: 9090)!)
         listener?.newConnectionHandler = { [weak self] connection in
-            self?.handleConnection(connection)
+            Task { @MainActor in
+                self?.handleConnection(connection)
+            }
         }
         listener?.start(queue: queue)
         isRunning = true
-        AppLogger.info("Proxy tunnel started on port \(port)", category: .proxy)
+        AppLogger.info("Proxy tunnel started on port \(port)", category: AppLogger.proxy)
     }
 
     func stop() {
@@ -35,7 +37,7 @@ final class ProxyTunnel {
         }
         connections.removeAll()
         isRunning = false
-        AppLogger.info("Proxy tunnel stopped", category: .proxy)
+        AppLogger.info("Proxy tunnel stopped", category: AppLogger.proxy)
     }
 
     func tunnelURL(for originalURL: String) -> String {
@@ -47,7 +49,7 @@ final class ProxyTunnel {
         connections.append(connection)
         connection.start(queue: queue)
 
-        connection.receive(minimumIncomingLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self, let data = data else {
                 connection.cancel()
                 return

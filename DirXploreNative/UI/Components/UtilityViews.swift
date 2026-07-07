@@ -53,7 +53,7 @@ struct WebView: UIViewRepresentable {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
-        return WKWebView(configuration: config)
+        return WKWebView(frame: .zero, configuration: config)
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
