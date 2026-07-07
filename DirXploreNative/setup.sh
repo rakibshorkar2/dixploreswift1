@@ -54,6 +54,7 @@ targets:
     platform: iOS
     sources:
       - WidgetExtension
+      - path: Models/DownloadActivityAttributes.swift
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.dirxplore.app.WidgetExtension
       INFOPLIST_FILE: WidgetExtension/Info.plist

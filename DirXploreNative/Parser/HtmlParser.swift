@@ -5,13 +5,6 @@ actor HtmlParser {
 
     private init() {}
 
-    private let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f
-    }()
-
     struct ParsedEntry: Sendable {
         var name: String
         var href: String

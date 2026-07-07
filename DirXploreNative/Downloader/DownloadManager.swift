@@ -534,10 +534,9 @@ final class DownloadManager: NSObject {
 
 extension DownloadManager: URLSessionDownloadDelegate {
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard let downloadId = taskIdMap[downloadTask.taskIdentifier] else { return }
-        progressMap[downloadId] = (totalBytesWritten, totalBytesExpectedToWrite)
-
         Task { @MainActor in
+            guard let downloadId = taskIdMap[downloadTask.taskIdentifier] else { return }
+            progressMap[downloadId] = (totalBytesWritten, totalBytesExpectedToWrite)
             guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
             downloads[index].downloadedBytes = totalBytesWritten
             downloads[index].totalBytes = totalBytesExpectedToWrite
@@ -553,26 +552,27 @@ extension DownloadManager: URLSessionDownloadDelegate {
     }
 
     nonisolated func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        guard let downloadId = taskIdMap[downloadTask.taskIdentifier],
-              let desc = downloadTask.taskDescription else { return }
-        let parts = desc.split(separator: "|", maxSplits: 1)
-        guard parts.count == 2 else { return }
-        let fileName = String(parts[1])
+        let desc = downloadTask.taskDescription
+        Task { @MainActor in
+            guard let downloadId = taskIdMap[downloadTask.taskIdentifier],
+                  let desc else { return }
+            let parts = desc.split(separator: "|", maxSplits: 1)
+            guard parts.count == 2 else { return }
+            let fileName = String(parts[1])
 
-        let destinationDir: URL
-        if let customDir = saveDirMap[downloadId] {
-            destinationDir = URL(fileURLWithPath: customDir)
-        } else {
-            destinationDir = defaultDownloadsPath()
-        }
+            let destinationDir: URL
+            if let customDir = saveDirMap[downloadId] {
+                destinationDir = URL(fileURLWithPath: customDir)
+            } else {
+                destinationDir = defaultDownloadsPath()
+            }
 
-        try? FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
-        let destinationUrl = destinationDir.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: destinationUrl)
+            try? FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+            let destinationUrl = destinationDir.appendingPathComponent(fileName)
+            try? FileManager.default.removeItem(at: destinationUrl)
 
-        do {
-            try FileManager.default.moveItem(at: location, to: destinationUrl)
-            Task { @MainActor in
+            do {
+                try FileManager.default.moveItem(at: location, to: destinationUrl)
                 guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
                 downloads[index].status = .done
                 downloads[index].savePath = destinationUrl.path
@@ -586,9 +586,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                 activeCount = activeTasks.count
                 updateLiveActivity()
                 sendNotification(title: "Download Complete", body: fileName)
-            }
-        } catch {
-            Task { @MainActor in
+            } catch {
                 guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
                 downloads[index].status = .error
                 downloads[index].errorMessage = "Failed to move file: \(error.localizedDescription)"
@@ -597,44 +595,40 @@ extension DownloadManager: URLSessionDownloadDelegate {
     }
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let downloadId = taskIdMap[task.taskIdentifier] else { return }
-        if let error = error as NSError? {
-            if error.code == NSURLErrorCancelled {
-                if resumeDataMap[downloadId] == nil {
-                    Task { @MainActor in
+        Task { @MainActor in
+            guard let downloadId = taskIdMap[task.taskIdentifier] else { return }
+            if let error = error as NSError? {
+                if error.code == NSURLErrorCancelled {
+                    if resumeDataMap[downloadId] == nil {
                         updateDownloadStatus(downloadId: downloadId, status: .paused)
                     }
-                }
-            } else if error.domain == NSURLErrorDomain && error.userInfo[NSURLSessionDownloadTaskResumeData] != nil {
-                let resumeData = error.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-                if let data = resumeData {
-                    resumeDataMap[downloadId] = data
-                }
-            } else {
-                Task { @MainActor in
+                } else if error.domain == NSURLErrorDomain && error.userInfo[NSURLSessionDownloadTaskResumeData] != nil {
+                    let resumeData = error.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+                    if let data = resumeData {
+                        resumeDataMap[downloadId] = data
+                    }
+                } else {
                     let attempt = retryCountMap[downloadId] ?? 0
                     if attempt < maxRetries, let downloadUrl = downloadUrlMap[downloadId] {
                         retryCountMap[downloadId] = attempt + 1
                         let delay = Double(1 << attempt)
                         AppLogger.info("Retrying download \(downloadId) in \(delay)s (attempt \(attempt + 1)/\(maxRetries))", category: AppLogger.download)
                         let delayNs = UInt64(delay * 1_000_000_000)
-                        Task { @MainActor in
-                            guard let self, self.retryCountMap[downloadId] != nil else { return }
-                            try? await Task.sleep(nanoseconds: delayNs)
-                            let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-                            let newTask: URLSessionDownloadTask
-                            if let data = resumeData {
-                                newTask = self.backgroundSession.downloadTask(withResumeData: data)
-                            } else {
-                                var request = URLRequest(url: URL(string: downloadUrl)!)
-                                request.setValue(AppConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
-                                newTask = self.backgroundSession.downloadTask(with: request)
-                            }
-                            newTask.taskDescription = task.taskDescription ?? "\(downloadId)|\(fileNameMap[downloadId] ?? "file")"
-                            self.activeTasks[downloadId] = newTask
-                            self.taskIdMap[newTask.taskIdentifier] = downloadId
-                            newTask.resume()
+                        guard let self, self.retryCountMap[downloadId] != nil else { return }
+                        try? await Task.sleep(nanoseconds: delayNs)
+                        let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+                        let newTask: URLSessionDownloadTask
+                        if let data = resumeData {
+                            newTask = self.backgroundSession.downloadTask(withResumeData: data)
+                        } else {
+                            var request = URLRequest(url: URL(string: downloadUrl)!)
+                            request.setValue(AppConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
+                            newTask = self.backgroundSession.downloadTask(with: request)
                         }
+                        newTask.taskDescription = task.taskDescription ?? "\(downloadId)|\(fileNameMap[downloadId] ?? "file")"
+                        self.activeTasks[downloadId] = newTask
+                        self.taskIdMap[newTask.taskIdentifier] = downloadId
+                        newTask.resume()
                     } else {
                         guard let index = downloads.firstIndex(where: { $0.id == downloadId }) else { return }
                         downloads[index].status = .error
@@ -650,9 +644,10 @@ extension DownloadManager: URLSessionDownloadDelegate {
     }
 
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.backgroundCompletionHandler?()
-            self.backgroundCompletionHandler = nil
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            backgroundCompletionHandler?()
+            backgroundCompletionHandler = nil
         }
     }
 }

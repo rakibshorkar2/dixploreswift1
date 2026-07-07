@@ -1,5 +1,5 @@
 import Foundation
-import Yams
+@preconcurrency import Yams
 
 @Observable
 @MainActor

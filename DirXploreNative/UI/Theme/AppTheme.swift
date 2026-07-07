@@ -1,6 +1,7 @@
 import SwiftUI
 
 @Observable
+@MainActor
 final class AppTheme {
     static let shared = AppTheme()
 
