@@ -58,10 +58,8 @@ jobs:
             -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_Python3=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_TryDecode=ON
-          TARGET=$(xcrun xcodebuild -project libtorrent-build/libtorrent.xcodeproj -list 2>/dev/null | awk '/^Targets:/{found=1; next} found{print $0; exit}' | xargs)
-          echo "Building target: $TARGET"
           xcrun xcodebuild -project libtorrent-build/libtorrent.xcodeproj \
-            -target "$TARGET" \
+            -target torrent-rasterbar \
             -sdk iphoneos \
             -configuration Release \
             build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
