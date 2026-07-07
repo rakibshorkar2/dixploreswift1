@@ -19,7 +19,7 @@ final class BrowserViewModel {
     var isSelectionMode = false
 
     private var history: [String] = []
-    private var historyIndex = -1
+    private(set) var historyIndex = -1
     private let parser = HtmlParser.shared
 
     let categories = ["All", "Movies", "Series/TV", "Games", "Software", "Anime", "Images"]
@@ -486,4 +486,4 @@ private func colorForType(_ type: DirectoryItemType) -> Color {
     }
 }
 
-extension DirectoryItemType: CaseIterable {}
+

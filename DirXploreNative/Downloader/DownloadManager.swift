@@ -614,7 +614,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                         let delay = Double(1 << attempt)
                         AppLogger.info("Retrying download \(downloadId) in \(delay)s (attempt \(attempt + 1)/\(maxRetries))", category: AppLogger.download)
                         let delayNs = UInt64(delay * 1_000_000_000)
-                        guard let self, self.retryCountMap[downloadId] != nil else { return }
+                        guard retryCountMap[downloadId] != nil else { return }
                         try? await Task.sleep(nanoseconds: delayNs)
                         let resumeData = (error as NSError?)?.userInfo[NSURLSessionDownloadTaskResumeData] as? Data
                         let newTask: URLSessionDownloadTask
@@ -625,7 +625,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                             request.setValue(AppConfiguration.userAgent, forHTTPHeaderField: "User-Agent")
                             newTask = self.backgroundSession.downloadTask(with: request)
                         }
-                        newTask.taskDescription = task.taskDescription ?? "\(downloadId)|\(fileNameMap[downloadId] ?? "file")"
+                        newTask.taskDescription = task.taskDescription ?? "\(downloadId)|\(self.fileNameMap[downloadId] ?? "file")"
                         self.activeTasks[downloadId] = newTask
                         self.taskIdMap[newTask.taskIdentifier] = downloadId
                         newTask.resume()

@@ -120,8 +120,10 @@ final class MediaPlayerViewModel {
     }
 
     deinit {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
+        Task { @MainActor in
+            if let observer = timeObserver {
+                player?.removeTimeObserver(observer)
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ import AVFoundation
 import CoreLocation
 import UIKit
 
+@MainActor
 final class BackgroundAudioService {
     static let shared = BackgroundAudioService()
 
@@ -51,6 +52,7 @@ final class BackgroundAudioService {
     }
 }
 
+@MainActor
 final class BackgroundLocationService: NSObject, CLLocationManagerDelegate {
     static let shared = BackgroundLocationService()
 

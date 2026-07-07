@@ -46,7 +46,7 @@ final class AppTheme {
 }
 
 private struct AppThemeKey: EnvironmentKey {
-    static let defaultValue = AppTheme.shared
+    @MainActor static let defaultValue = AppTheme.shared
 }
 
 extension EnvironmentValues {

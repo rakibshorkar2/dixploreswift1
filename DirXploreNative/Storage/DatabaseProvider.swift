@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @MainActor
-enum DatabaseProvider {
+final class DatabaseProvider {
     static let shared = DatabaseProvider()
 
     private let container: ModelContainer

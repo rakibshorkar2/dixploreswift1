@@ -1,7 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 
-enum DirectoryItemType: String, Codable, Sendable {
+enum DirectoryItemType: String, Codable, Sendable, CaseIterable {
     case directory, video, audio, image, archive, document, other
 
     var tag: String {
