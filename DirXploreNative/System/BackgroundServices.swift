@@ -88,14 +88,18 @@ final class BackgroundLocationService: NSObject, CLLocationManagerDelegate {
         isUpdating = false
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
-            if isUpdating { manager.startUpdatingLocation() }
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            if manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse {
+                if isUpdating { manager.startUpdatingLocation() }
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {}
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        AppLogger.error("BackgroundLocation error: \(error.localizedDescription)")
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {}
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            AppLogger.error("BackgroundLocation error: \(error.localizedDescription)")
+        }
     }
 }

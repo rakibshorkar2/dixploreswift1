@@ -2,7 +2,7 @@ import SwiftUI
 
 @Observable
 @MainActor
-final class AppTheme {
+final class AppTheme: Sendable {
     static let shared = AppTheme()
 
     var colorScheme: ColorSchemeOption = .system
@@ -46,7 +46,7 @@ final class AppTheme {
 }
 
 private struct AppThemeKey: EnvironmentKey {
-    @MainActor static let defaultValue = AppTheme.shared
+    static let defaultValue = AppTheme.shared
 }
 
 extension EnvironmentValues {
