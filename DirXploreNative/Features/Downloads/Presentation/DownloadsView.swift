@@ -98,6 +98,11 @@ struct DownloadsView: View {
                     dm.importQueue(from: url)
                 }
             }
+            .sheet(isPresented: $showHashVerification) {
+                if let item = hashVerificationItem {
+                    HashVerificationView(fileURL: URL(fileURLWithPath: item.savePath), fileName: item.fileName)
+                }
+            }
             .alert("Clear Completed", isPresented: $showClearConfirmation) {
                 Button("Clear", role: .destructive) { dm.clearCompleted() }
                 Button("Cancel", role: .cancel) {}
@@ -167,11 +172,6 @@ struct DownloadsView: View {
         }
         Divider()
         Button(role: .destructive) { dm.deleteDownload(id: item.id, deleteFile: true) } label: { Label("Delete", systemImage: "trash") }
-    }
-    .sheet(isPresented: $showHashVerification) {
-        if let item = hashVerificationItem {
-            HashVerificationView(fileURL: URL(fileURLWithPath: item.savePath), fileName: item.fileName)
-        }
     }
 
     @ViewBuilder

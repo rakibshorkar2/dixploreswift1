@@ -1,6 +1,5 @@
 import Foundation
 import LocalAuthentication
-import KeychainSwift
 
 enum LockType: String, Codable, Sendable {
     case none, device, custom

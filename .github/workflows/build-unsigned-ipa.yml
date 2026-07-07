@@ -42,6 +42,10 @@ jobs:
           settings:
             SWIFT_VERSION: "6.0"
             SWIFT_STRICT_CONCURRENCY: "complete"
+          packages:
+            Yams:
+              url: https://github.com/jpsim/Yams
+              from: 5.0.0
           targets:
             DirXplore:
               type: application
@@ -68,7 +72,8 @@ jobs:
                 IPHONEOS_DEPLOYMENT_TARGET: "18.0"
               entitlements:
                 path: Resources/App.entitlements
-              dependencies: []
+              dependencies:
+                - package: Yams
             WidgetExtension:
               type: app-extension
               platform: iOS

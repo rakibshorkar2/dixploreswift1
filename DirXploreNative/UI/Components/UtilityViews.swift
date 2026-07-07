@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import WebKit
 
 struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
