@@ -100,6 +100,7 @@ jobs:
             -project DirXplore.xcodeproj \
             -scheme DirXplore \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -archivePath build/DirXplore.xcarchive \
             CODE_SIGN_IDENTITY="" \
