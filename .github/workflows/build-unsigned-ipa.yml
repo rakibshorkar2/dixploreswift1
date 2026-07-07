@@ -27,7 +27,7 @@ jobs:
         run: |
           if [ ! -d "DirXploreNative/Thirdparty/libtorrent/CMakeLists.txt" ]; then
             rm -rf DirXploreNative/Thirdparty/libtorrent
-            git clone --depth 1 --branch v2.0.11 \
+            git clone --depth 1 --branch v2.0.11 --recurse-submodules \
               https://github.com/arvidn/libtorrent.git \
               DirXploreNative/Thirdparty/libtorrent
           fi
@@ -46,19 +46,16 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_STANDARD=14 \
             -G Xcode \
-            -DCMAKE_XCODE_ATTRIBUTE_SUPPORTS_MACCATALYST=YES \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES="arm64" \
             -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET=15.0 \
-            -DCMAKE_XCODE_ATTRIBUTE_TVOS_DEPLOYMENT_TARGET=15.0 \
-            -DCMAKE_XCODE_ATTRIBUTE_XROS_DEPLOYMENT_TARGET=1.0 \
-            -DCMAKE_XCODE_ATTRIBUTE_WATCHOS_DEPLOYMENT_TARGET=4.0 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
             -DCMAKE_CXX_FLAGS="-DTORRENT_HAVE_MMAP=0 -DNDEBUG -DTORRENT_NO_DEPRECATE" \
             -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_XCODE_ATTRIBUTE_ARCHS="\$(ARCHS_STANDARD)" \
-            -DCMAKE_XCODE_ATTRIBUTE_SUPPORTED_PLATFORMS="iphoneos iphonesimulator" \
             -DBoost_INCLUDE_DIR="$BOOST_DIR/include" \
             -DBoost_NO_BOOST_CMAKE=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON \
+            -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_Python3=ON \
             -DCMAKE_DISABLE_FIND_PACKAGE_TryDecode=ON
           xcrun xcodebuild -project libtorrent-build/libtorrent.xcodeproj \
