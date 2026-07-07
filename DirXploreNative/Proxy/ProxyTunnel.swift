@@ -54,15 +54,16 @@ final class ProxyTunnel {
                 connection.cancel()
                 return
             }
-
-            let request = String(data: data, encoding: .utf8) ?? ""
-            if let url = self.extractTargetURL(from: request) {
-                self.proxyRequest(to: url, originalRequest: request, connection: connection)
-            } else {
-                let response = "HTTP/1.1 400 Bad Request\r\n\r\n"
-                connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
-                    connection.cancel()
-                })
+            Task { @MainActor in
+                let request = String(data: data, encoding: .utf8) ?? ""
+                if let url = self.extractTargetURL(from: request) {
+                    self.proxyRequest(to: url, originalRequest: request, connection: connection)
+                } else {
+                    let response = "HTTP/1.1 400 Bad Request\r\n\r\n"
+                    connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
+                        connection.cancel()
+                    })
+                }
             }
         }
     }
