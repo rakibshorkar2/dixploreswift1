@@ -1,0 +1,147 @@
+name: Build Unsigned IPA (Sideloading)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: List SDKs
+        run: xcodebuild -showsdks
+
+      - name: Install XcodeGen
+        run: brew install xcodegen 2>/dev/null || true
+
+      - name: Generate Xcode project
+        run: |
+          cd DirXploreNative
+          # Create project.yml for xcodegen
+          cat > project.yml << 'XCODEGEN'
+          name: DirXplore
+          options:
+            bundleIdPrefix: com.dirxplore
+            deploymentTarget:
+              iOS: "18.0"
+            xcodeVersion: "16.0"
+          settings:
+            SWIFT_VERSION: "6.0"
+            SWIFT_STRICT_CONCURRENCY: "complete"
+          targets:
+            DirXplore:
+              type: application
+              platform: iOS
+              sources:
+                - path: .
+                  excludes:
+                    - "setup.sh"
+                    - "setup.ps1"
+                    - "project.yml"
+                    - "Package.swift"
+                    - "Tests"
+                    - "build"
+              settings:
+                PRODUCT_BUNDLE_IDENTIFIER: com.dirxplore.app
+                INFOPLIST_FILE: Resources/Info.plist
+                CODE_SIGN_STYLE: Manual
+                CODE_SIGN_IDENTITY: ""
+                PROVISIONING_PROFILE_SPECIFIER: ""
+                PRODUCT_NAME: DirXplore
+                ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+                DEVELOPMENT_TEAM: ""
+                TARGETED_DEVICE_FAMILY: "1,2"
+                IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+              entitlements:
+                path: Resources/App.entitlements
+              dependencies: []
+            WidgetExtension:
+              type: app-extension
+              platform: iOS
+              sources:
+                - WidgetExtension
+              settings:
+                PRODUCT_BUNDLE_IDENTIFIER: com.dirxplore.app.WidgetExtension
+                INFOPLIST_FILE: WidgetExtension/Info.plist
+                CODE_SIGN_STYLE: Manual
+                CODE_SIGN_IDENTITY: ""
+                PROVISIONING_PROFILE_SPECIFIER: ""
+              dependencies:
+                - target: DirXplore
+          XCODEGEN
+          xcodegen generate
+          echo "Project generated:"
+          ls -la *.xcodeproj 2>/dev/null || echo "No xcodeproj found"
+          
+      - name: Build archive
+        run: |
+          cd DirXploreNative
+          xcodebuild archive \
+            -project DirXplore.xcodeproj \
+            -scheme DirXplore \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath build/DirXplore.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            DEVELOPMENT_TEAM="" \
+            ARCHS="arm64" \
+            ONLY_ACTIVE_ARCH=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=18.0 \
+            | tee build.log
+
+      - name: Create unsigned IPA
+        run: |
+          cd DirXploreNative
+          ARCHIVE="build/DirXplore.xcarchive"
+          if [ -d "$ARCHIVE" ]; then
+            mkdir -p build/Payload
+            # Find the .app bundle
+            APP_DIR=$(find "$ARCHIVE/Products" -name "*.app" -type d | head -1)
+            if [ -n "$APP_DIR" ]; then
+              cp -R "$APP_DIR" build/Payload/
+              cd build
+              zip -r DirXplore-unsigned.ipa Payload -x "._*" -x ".DS_Store"
+              echo "IPA created successfully!"
+              ls -lh DirXplore-unsigned.ipa
+            else
+              echo "No .app found in archive"
+              find "$ARCHIVE" -name "*.app" -type d 2>/dev/null
+            fi
+          else
+            echo "Archive not created. Checking build artifacts..."
+            find build -name "*.app" -type d 2>/dev/null
+            ls -la build/ 2>/dev/null
+          fi
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DirXplore-unsigned-ipa
+          path: DirXploreNative/build/DirXplore-unsigned.ipa
+          compression-level: 0
+          if-no-files-found: warn
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: DirXploreNative/build.log
+          if-no-files-found: ignore
