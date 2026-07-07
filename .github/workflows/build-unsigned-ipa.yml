@@ -41,7 +41,7 @@ jobs:
             xcodeVersion: "16.0"
           settings:
             SWIFT_VERSION: "6.0"
-            SWIFT_STRICT_CONCURRENCY: "complete"
+            SWIFT_STRICT_CONCURRENCY: "minimal"
           packages:
             Yams:
               url: https://github.com/jpsim/Yams

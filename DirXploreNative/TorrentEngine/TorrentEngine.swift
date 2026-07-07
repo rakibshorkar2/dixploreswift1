@@ -115,7 +115,7 @@ final class TorrentEngine {
             TorrentItem(
                 id: entity.id,
                 name: entity.name,
-                hash: entity.hashValue,
+                hash: entity.torrentHashValue,
                 magnetLink: entity.magnetLink,
                 savePath: entity.savePath,
                 status: entity.status,
@@ -139,7 +139,7 @@ final class TorrentEngine {
                 let entity = TorrentEntity(
                     id: item.id,
                     name: item.name,
-                    hashValue: item.hash,
+                    torrentHashValue: item.hash,
                     magnetLink: item.magnetLink,
                     savePath: item.savePath,
                     status: item.status,

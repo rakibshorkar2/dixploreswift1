@@ -141,7 +141,7 @@ final class DeepCrawler {
             progress = calculateProgress()
 
         } catch {
-            AppLogger.error("Crawl error at \(task.url): \(error)", category: .crawler)
+            AppLogger.error("Crawl error at \(task.url): \(error)", category: AppLogger.crawler)
         }
     }
 

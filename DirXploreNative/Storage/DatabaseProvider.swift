@@ -75,7 +75,7 @@ final class DownloadEntity {
 final class TorrentEntity {
     var id: String
     var name: String
-    var hashValue: String
+    var torrentHashValue: String
     var magnetLink: String
     var savePath: String
     var statusRaw: String
@@ -85,10 +85,10 @@ final class TorrentEntity {
     var addedAt: Date
     var isSequential: Bool
 
-    init(id: String, name: String, hashValue: String, magnetLink: String, savePath: String, status: TorrentStatus = .downloading, progress: Double = 0, size: Int64 = 0, speed: Double = 0, addedAt: Date = Date(), isSequential: Bool = false) {
+    init(id: String, name: String, torrentHashValue: String, magnetLink: String, savePath: String, status: TorrentStatus = .downloading, progress: Double = 0, size: Int64 = 0, speed: Double = 0, addedAt: Date = Date(), isSequential: Bool = false) {
         self.id = id
         self.name = name
-        self.hashValue = hashValue
+        self.torrentHashValue = torrentHashValue
         self.magnetLink = magnetLink
         self.savePath = savePath
         self.statusRaw = status.rawValue

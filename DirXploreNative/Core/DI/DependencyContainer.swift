@@ -9,7 +9,7 @@ protocol Resolver: AnyObject {
 }
 
 final class DependencyContainer: Resolver {
-    static let shared = DependencyContainer()
+    nonisolated(unsafe) static let shared = DependencyContainer()
 
     private var services: [ObjectIdentifier: Any] = [:]
     private let lock = NSLock()

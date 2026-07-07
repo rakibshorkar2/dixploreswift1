@@ -103,12 +103,12 @@ final class DownloadManager: NSObject {
 
     func addDownload(url: String, fileName: String, saveDir: String? = nil, batchId: String? = nil, batchName: String? = nil) -> String {
         if downloads.contains(where: { $0.url == url && $0.status != .done }) {
-            AppLogger.info("Duplicate download prevented: \(url)", category: .download)
+            AppLogger.info("Duplicate download prevented: \(url)", category: AppLogger.download)
             return downloads.first(where: { $0.url == url })!.id
         }
 
         guard hasEnoughDiskSpace(expectedSize: 0) else {
-            AppLogger.error("Not enough disk space for download", category: .download)
+            AppLogger.error("Not enough disk space for download", category: AppLogger.download)
             return ""
         }
 
@@ -441,7 +441,7 @@ final class DownloadManager: NSObject {
         do {
             liveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
         } catch {
-            AppLogger.error("Failed to start Live Activity: \(error)", category: .download)
+            AppLogger.error("Failed to start Live Activity: \(error)", category: AppLogger.download)
         }
     }
 
@@ -616,7 +616,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
                     if attempt < maxRetries, let downloadUrl = downloadUrlMap[downloadId] {
                         retryCountMap[downloadId] = attempt + 1
                         let delay = Double(1 << attempt)
-                        AppLogger.info("Retrying download \(downloadId) in \(delay)s (attempt \(attempt + 1)/\(maxRetries))", category: .download)
+                        AppLogger.info("Retrying download \(downloadId) in \(delay)s (attempt \(attempt + 1)/\(maxRetries))", category: AppLogger.download)
                         let delayNs = UInt64(delay * 1_000_000_000)
                         Task { @MainActor in
                             guard let self, self.retryCountMap[downloadId] != nil else { return }
