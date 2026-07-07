@@ -25,6 +25,9 @@ jobs:
       - name: List SDKs
         run: xcodebuild -showsdks
 
+      - name: Install iOS 18.0 Runtime
+        run: xcodebuild -downloadPlatform iOS -quiet || echo "Platform download skipped, attempting build anyway"
+
       - name: Install XcodeGen
         run: brew install xcodegen 2>/dev/null || true
 
@@ -96,6 +99,7 @@ jobs:
       - name: Build archive
         run: |
           cd DirXploreNative
+          set -o pipefail
           xcodebuild archive \
             -project DirXplore.xcodeproj \
             -scheme DirXplore \
@@ -110,7 +114,7 @@ jobs:
             DEVELOPMENT_TEAM="" \
             ARCHS="arm64" \
             ONLY_ACTIVE_ARCH=NO \
-            | tee build.log
+            2>&1 | tee build.log
 
       - name: Create unsigned IPA
         run: |
