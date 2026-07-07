@@ -46,6 +46,13 @@ jobs:
             Yams:
               url: https://github.com/jpsim/Yams
               from: 5.0.0
+          schemes:
+            DirXplore:
+              build:
+                targets:
+                  DirXplore: all
+              archive:
+                config: Release
           targets:
             DirXplore:
               type: application
